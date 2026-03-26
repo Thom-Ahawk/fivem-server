@@ -1,4 +1,4 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local ESX = exports['es_extended']:getSharedObject()
 
 local inMission = false
 local missionPed = nil
@@ -48,7 +48,7 @@ local function drawTxt3D(coords, text)
 end
 
 local function isTaxi()
-    local data = QBCore.Functions.GetPlayerData()
+    local data = ESX.GetPlayerData()
     return data.job and data.job.name == Config.JobName
 end
 
@@ -95,38 +95,12 @@ local function openTablet(data)
 end
 
 local function tryGiveKeys(veh, plate)
-    local detectedPlate = plate
-    if not detectedPlate or detectedPlate == '' then
-        detectedPlate = QBCore.Functions.GetPlate(veh)
-    end
-    local finalPlate = string.gsub((detectedPlate or ''), '^%s*(.-)%s*$', '%1')
-    if finalPlate == '' then return end
-
-    local variants = {
-        finalPlate,
-        string.upper(finalPlate),
-        string.lower(finalPlate)
-    }
-
-    local sent = {}
-    for _, variant in ipairs(variants) do
-        if variant ~= '' and not sent[variant] then
-            sent[variant] = true
-            -- qb-vehiclekeys attendu: acquisition serveur + fallback compat ancien event
-            TriggerServerEvent('qb-vehiclekeys:server:AcquireVehicleKeys', variant)
-            TriggerEvent('vehiclekeys:client:SetOwner', variant)
-            TriggerEvent('qb-vehiclekeys:client:AddKeys', variant)
-        end
-    end
-end
-
-local function syncKeysFromServer()
-    QBCore.Functions.TriggerCallback('qb-vehiclekeys:server:GetVehicleKeys', function(keysList)
-        if type(keysList) ~= 'table' then return end
-        for k, _ in pairs(keysList) do
-            TriggerEvent('qb-vehiclekeys:client:AddKeys', k)
-        end
-    end)
+    -- Generic key handling for ESX
+    -- Many ESX servers use custom key scripts.
+    -- We trigger a generic event that can be easily mapped.
+    TriggerEvent('bs_taxi:client:giveKeys', plate, veh)
+    -- Fallback for some common scripts
+    SetVehicleHasBeenOwnedByPlayer(veh, true)
 end
 
 local function ensureEntityFromNetId(netId, timeoutMs)
@@ -135,9 +109,11 @@ local function ensureEntityFromNetId(netId, timeoutMs)
     local timeout = timeoutMs or 4000
 
     while waited < timeout do
-        local veh = NetToVeh(netId)
-        if veh ~= 0 and DoesEntityExist(veh) then
-            return veh
+        if NetworkDoesNetworkIdExist(netId) then
+            local veh = NetToVeh(netId)
+            if veh ~= 0 and DoesEntityExist(veh) then
+                return veh
+            end
         end
         Wait(step)
         waited = waited + step
@@ -148,7 +124,7 @@ end
 
 local function refreshTablet()
     if not garageOpen then return end
-    QBCore.Functions.TriggerCallback('bs_taxi:server:getFleet', function(data)
+    ESX.TriggerServerCallback('bs_taxi:server:getFleet', function(data)
         if not data or not data.ok then return end
         openTablet(data)
     end)
@@ -162,13 +138,13 @@ end)
 
 RegisterNUICallback('buyUniqueVehicle', function(_, cb)
     TriggerServerEvent('bs_taxi:server:buyUniqueVehicle')
-    SetTimeout(250, refreshTablet)
+    SetTimeout(500, refreshTablet)
     cb('ok')
 end)
 
 RegisterNUICallback('spawnVehicle', function(data, cb)
     TriggerServerEvent('bs_taxi:server:spawnVehicle', tonumber(data.id))
-    SetTimeout(250, refreshTablet)
+    SetTimeout(500, refreshTablet)
     cb('ok')
 end)
 
@@ -176,77 +152,46 @@ RegisterNUICallback('storeCurrentVehicle', function(_, cb)
     local ped = PlayerPedId()
     local veh = GetVehiclePedIsIn(ped, false)
     if veh == 0 then
-        QBCore.Functions.Notify('Tu dois être dans le véhicule à ranger.', 'error')
+        ESX.ShowNotification('Tu dois être dans le véhicule à ranger.', 'error')
         cb('ok')
         return
     end
 
+    local plate = GetVehicleNumberPlateText(veh)
     local netId = NetworkGetNetworkIdFromEntity(veh)
-    local fuel = Entity(veh).state.fuel or 100.0
+    local fuel = GetVehicleFuelLevel(veh)
     local engine = GetVehicleEngineHealth(veh)
     local body = GetVehicleBodyHealth(veh)
-    TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
-    SetTimeout(250, refreshTablet)
+
+    TriggerServerEvent('bs_taxi:server:storeVehicle', netId, plate, fuel, engine, body)
+    SetTimeout(500, refreshTablet)
     cb('ok')
 end)
 
 RegisterNUICallback('recoverFleet', function(_, cb)
     TriggerServerEvent('bs_taxi:server:recoverFleet')
-    SetTimeout(250, refreshTablet)
+    SetTimeout(500, refreshTablet)
     cb('ok')
 end)
 
 RegisterNUICallback('forceRecoverVehicle', function(data, cb)
     TriggerServerEvent('bs_taxi:server:forceRecoverVehicle', tonumber(data.id))
-    SetTimeout(250, refreshTablet)
+    SetTimeout(500, refreshTablet)
     cb('ok')
 end)
 
 RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
-    local veh = ensureEntityFromNetId(netId, 4000)
+    local veh = ensureEntityFromNetId(netId, 5000)
     if veh == 0 then return end
 
     SetVehicleDoorsLocked(veh, 1)
-    SetVehicleDoorsLockedForAllPlayers(veh, false)
-    SetVehicleNeedsToBeHotwired(veh, false)
-    SetVehicleFuelLevel(veh, fuel)
-    Entity(veh).state.fuel = fuel
+    SetVehicleFuelLevel(veh, fuel + 0.0)
     SetVehicleHasBeenOwnedByPlayer(veh, true)
     SetVehRadioStation(veh, 'OFF')
     TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
 
-    local finalPlate = QBCore.Functions.GetPlate(veh)
-    if not finalPlate or finalPlate == '' then
-        finalPlate = plate or GetVehicleNumberPlateText(veh)
-    end
-    finalPlate = string.gsub(finalPlate or '', '^%s*(.-)%s*$', '%1')
-    TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
-    tryGiveKeys(veh, finalPlate)
-
-    -- Retry anti-race (qb-vehiclekeys peut init en retard au spawn réseau)
-    for i = 1, 5 do
-        SetTimeout(i * 400, function()
-            if DoesEntityExist(veh) then
-                tryGiveKeys(veh, finalPlate)
-            end
-        end)
-    end
-    SetTimeout(1200, syncKeysFromServer)
-
-    QBCore.Functions.Notify(('Clés du véhicule %s attribuées.'):format(finalPlate), 'success')
-end)
-
-RegisterNetEvent('bs_taxi:client:grantSpawnedVehicleKeys', function(plate)
-    local ped = PlayerPedId()
-    local veh = GetVehiclePedIsIn(ped, false)
-
     tryGiveKeys(veh, plate)
-    for i = 1, 5 do
-        SetTimeout(i * 400, function()
-            tryGiveKeys(veh, plate)
-        end)
-    end
-    SetTimeout(1200, syncKeysFromServer)
+    ESX.ShowNotification(('Clés du véhicule %s attribuées.'):format(plate), 'success')
 end)
 
 local function choosePickupDropoff()
@@ -263,7 +208,9 @@ end
 local function clearMission()
     if DoesBlipExist(missionBlip) then RemoveBlip(missionBlip) end
     if DoesBlipExist(dropBlip) then RemoveBlip(dropBlip) end
-    if missionPed and DoesEntityExist(missionPed) then DeleteEntity(missionPed) end
+    if missionPed and DoesEntityExist(missionPed) then
+        DeleteEntity(missionPed)
+    end
     missionPed, missionBlip, dropBlip = nil, nil, nil
     missionPickup, missionDropoff = nil, nil
     inMission = false
@@ -272,23 +219,23 @@ end
 
 local function startMission()
     if inMission then
-        QBCore.Functions.Notify('Tu as déjà une mission.', 'error')
+        ESX.ShowNotification('Tu as déjà une mission.', 'error')
         return
     end
 
     if GetGameTimer() < canStartMissionAt then
-        QBCore.Functions.Notify('Patiente un instant avant la prochaine mission.', 'error')
+        ESX.ShowNotification('Patiente un instant avant la prochaine mission.', 'error')
         return
     end
 
     if not isTaxi() then
-        QBCore.Functions.Notify('Tu dois être taxi.', 'error')
+        ESX.ShowNotification('Tu dois être taxi.', 'error')
         return
     end
 
     local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
     if vehicle == 0 then
-        QBCore.Functions.Notify('Monte dans un taxi pour démarrer.', 'error')
+        ESX.ShowNotification('Monte dans un taxi pour démarrer.', 'error')
         return
     end
 
@@ -311,83 +258,103 @@ local function startMission()
     SetBlipRouteColour(missionBlip, 5)
     SetBlipSprite(missionBlip, 280)
 
-    QBCore.Functions.Notify('Va chercher le client PNJ.', 'primary')
+    ESX.ShowNotification('Va chercher le client PNJ.', 'info')
 end
 
+-- Main Loop for Interactions
 CreateThread(function()
     createMainBlips()
 
     while true do
-        local sleep = 1200
+        local sleep = 1000
+        if not isTaxi() then
+            Wait(2000)
+            goto continue
+        end
+
         local ped = PlayerPedId()
         local pos = GetEntityCoords(ped)
 
+        -- Garage Interaction
         local garageCoords = getSafeCoord('Garage')
         local garageDist = #(pos - garageCoords)
         if garageDist < 12.0 then
             sleep = 0
             DrawMarker(1, garageCoords.x, garageCoords.y, garageCoords.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 0.5, 255, 204, 0, 120, false, false, 2, nil, nil, false)
-        end
-        if garageDist < 3.0 then
-            sleep = 0
-            drawTxt3D(garageCoords + vec3(0.0, 0.0, 1.0), '[E] Ouvrir tablette garage')
-            if IsControlJustReleased(0, 38) and not garageOpen then
-                QBCore.Functions.TriggerCallback('bs_taxi:server:getFleet', function(data)
-                    if not data.ok then
-                        QBCore.Functions.Notify(data.message, 'error')
-                        return
-                    end
-                    openTablet(data)
-                end)
+
+            if garageDist < 3.0 then
+                drawTxt3D(garageCoords + vec3(0.0, 0.0, 1.0), '[E] Tablette Garage')
+                if IsControlJustReleased(0, 38) and not garageOpen then
+                    ESX.TriggerServerCallback('bs_taxi:server:getFleet', function(data)
+                        if not data.ok then
+                            ESX.ShowNotification(data.message, 'error')
+                            return
+                        end
+                        openTablet(data)
+                    end)
+                end
             end
         end
 
+        -- Mission Interaction
         local missionCoords = getSafeCoord('Mission')
         local missionDist = #(pos - missionCoords)
         if missionDist < 12.0 then
             sleep = 0
             DrawMarker(1, missionCoords.x, missionCoords.y, missionCoords.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 0.5, 255, 204, 0, 120, false, false, 2, nil, nil, false)
-        end
-        if missionDist < 3.0 then
-            sleep = 0
-            drawTxt3D(missionCoords + vec3(0.0, 0.0, 1.0), '[E] Lancer mission taxi PNJ')
-            if IsControlJustReleased(0, 38) then
-                startMission()
+
+            if missionDist < 3.0 then
+                drawTxt3D(missionCoords + vec3(0.0, 0.0, 1.0), '[E] Mission PNJ')
+                if IsControlJustReleased(0, 38) then
+                    startMission()
+                end
             end
         end
 
+        ::continue::
         Wait(sleep)
     end
 end)
 
+-- Mission Thread
 CreateThread(function()
     while true do
-        Wait(0)
+        local sleep = 1000
         if inMission and missionPed then
-            local pCoords = GetEntityCoords(PlayerPedId())
+            sleep = 0
+            local ped = PlayerPedId()
+            local pCoords = GetEntityCoords(ped)
 
             if not hasPassenger then
                 local pickupCoords = vec3(missionPickup.x, missionPickup.y, missionPickup.z)
                 local dist = #(pCoords - pickupCoords)
 
-                if dist < 24.0 then
-                    DrawMarker(2, pickupCoords.x, pickupCoords.y, pickupCoords.z + 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.18, 0.18, 0.18, 255, 204, 0, 200, false, true, 2, nil, nil, false)
+                if dist < 20.0 then
+                    DrawMarker(2, pickupCoords.x, pickupCoords.y, pickupCoords.z + 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 255, 204, 0, 200, false, true, 2, nil, nil, false)
                 end
 
                 if dist < 8.0 then
-                    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-                    if vehicle ~= 0 then
+                    local vehicle = GetVehiclePedIsIn(ped, false)
+                    if vehicle ~= 0 and GetPedInVehicleSeat(vehicle, -1) == ped then
                         TaskEnterVehicle(missionPed, vehicle, -1, 2, 1.0, 1, 0)
-                        Wait(1500)
-                        hasPassenger = true
 
-                        if DoesBlipExist(missionBlip) then RemoveBlip(missionBlip) end
-                        dropBlip = AddBlipForCoord(missionDropoff.x, missionDropoff.y, missionDropoff.z)
-                        SetBlipRoute(dropBlip, true)
-                        SetBlipRouteColour(dropBlip, 5)
-                        SetBlipSprite(dropBlip, 1)
+                        local timeout = 0
+                        while not IsPedInVehicle(missionPed, vehicle, false) and timeout < 100 do
+                            Wait(100)
+                            timeout = timeout + 1
+                        end
 
-                        QBCore.Functions.Notify('Client monté. Dépose-le à destination.', 'success')
+                        if IsPedInVehicle(missionPed, vehicle, false) then
+                            hasPassenger = true
+                            if DoesBlipExist(missionBlip) then RemoveBlip(missionBlip) end
+
+                            dropBlip = AddBlipForCoord(missionDropoff.x, missionDropoff.y, missionDropoff.z)
+                            SetBlipRoute(dropBlip, true)
+                            SetBlipRouteColour(dropBlip, 5)
+                            SetBlipSprite(dropBlip, 1)
+
+                            ESX.ShowNotification('Client monté. Dépose-le à destination.', 'success')
+                        end
                     end
                 end
             else
@@ -399,8 +366,9 @@ CreateThread(function()
                 end
 
                 if distDrop < 6.0 then
-                    TaskLeaveVehicle(missionPed, GetVehiclePedIsIn(PlayerPedId(), false), 0)
-                    Wait(1000)
+                    local vehicle = GetVehiclePedIsIn(ped, false)
+                    TaskLeaveVehicle(missionPed, vehicle, 0)
+                    Wait(1500)
                     TaskWanderStandard(missionPed, 10.0, 10)
 
                     local distance = #(vec3(missionPickup.x, missionPickup.y, missionPickup.z) - drop)
@@ -410,9 +378,8 @@ CreateThread(function()
                     clearMission()
                 end
             end
-        else
-            Wait(500)
         end
+        Wait(sleep)
     end
 end)
 
@@ -421,3 +388,19 @@ AddEventHandler('onResourceStop', function(res)
     SetNuiFocus(false, false)
     clearMission()
 end)
+
+-- Placeholder for future features
+function OpenGarage()
+    -- Logic for opening a vehicle-selection menu or similar
+    -- Could use ESX.UI.Menu.Open
+end
+
+function OpenBossMenu()
+    -- Logic for opening the society/boss menu
+    -- Integration with esx_society or similar
+    -- Example: TriggerEvent('esx_society:openBossMenu', 'taxi', function(data, menu) menu.close() end, { wash = false })
+end
+
+function StartAdvancedMission(tier)
+    -- Logic for missions based on player level or vehicle type
+end

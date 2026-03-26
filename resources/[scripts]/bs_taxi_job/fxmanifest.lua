@@ -3,12 +3,11 @@ game 'gta5'
 
 lua54 'yes'
 
-author 'GPT-5.3-Codex'
-description 'QBCore taxi job with NPC missions and fleet tablet garage'
-version '1.0.0'
+author 'Jules (FiveM Expert)'
+description 'ESX taxi job with NPC missions and fleet tablet garage'
+version '1.1.0'
 
 shared_scripts {
-    '@qb-core/shared/locale.lua',
     'config.lua'
 }
 

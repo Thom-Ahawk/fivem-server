@@ -1,7 +1,7 @@
 Config = {}
 
 Config.JobName = 'taxi'
-Config.BossGradeName = 'boss'
+Config.BossGradeName = 'boss' -- Job grade name for the boss
 Config.UniqueGarageVehicle = 'taxi'
 Config.VehiclePrice = 15000
 Config.MissionCooldown = 8 -- seconds between rides
@@ -11,9 +11,9 @@ Config.PaymentPerKm = 110
 Config.PaymentBase = 180
 
 Config.Blips = {
-    Garage = {coords = vec3(900.1, -179.2, 73.9), sprite = 198, color = 5, scale = 0.8, label = 'Taxi Garage'},
-    Boss = {coords = vec3(903.2, -171.5, 74.1), sprite = 475, color = 46, scale = 0.8, label = 'Taxi Patron'},
-    Mission = {coords = vec3(908.7, -163.4, 74.1), sprite = 280, color = 5, scale = 0.75, label = 'Taxi Missions PNJ'}
+    Garage = {coords = vec3(900.1, -179.2, 73.9), sprite = 198, color = 5, scale = 0.8, label = 'Garage Taxi'},
+    Boss = {coords = vec3(903.2, -171.5, 74.1), sprite = 475, color = 46, scale = 0.8, label = 'Patron Taxi'},
+    Mission = {coords = vec3(908.7, -163.4, 74.1), sprite = 280, color = 5, scale = 0.75, label = 'Missions Taxi'}
 }
 
 Config.GarageSpawn = {
