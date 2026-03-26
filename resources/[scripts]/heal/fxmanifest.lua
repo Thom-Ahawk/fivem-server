@@ -2,7 +2,7 @@ fx_version 'cerulean'
 game 'gta5'
 
 author 'Jules'
-description 'A simple heal script with cooldown for ESX'
+description 'A simple heal script with cooldown for QBCore'
 version '1.0.0'
 
 client_scripts {

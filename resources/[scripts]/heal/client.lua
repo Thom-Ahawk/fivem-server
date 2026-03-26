@@ -11,6 +11,6 @@ AddEventHandler('heal:playerHeal', function()
     ResetPedVisibleDamage(ped)
     ClearPedLastWeaponDamage(ped)
 
-    -- Optional: Feedback message (could also be handled via ESX.ShowNotification if preferred)
+    -- Optional: Feedback message (could also be handled via QBCore:Notify if preferred)
     -- In this implementation, the server already sends a notification.
 end)

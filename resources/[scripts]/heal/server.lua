@@ -1,17 +1,14 @@
+local QBCore = exports['qb-core']:GetCoreObject()
 local cooldowns = {}
 
--- Initialize ESX
-ESX = exports["es_extended"]:getSharedObject()
-
 -- Register the /heal command
-ESX.RegisterCommand('heal', 'user', function(xPlayer, args, showError)
-    local source = xPlayer.source
+QBCore.Commands.Add('heal', 'Heal yourself', {}, false, function(source, args)
     local currentTime = os.time()
 
     -- Check if player is on cooldown
     if cooldowns[source] and (currentTime - cooldowns[source]) < 60 then
         local remainingTime = 60 - (currentTime - cooldowns[source])
-        xPlayer.showNotification("You must wait " .. remainingTime .. " seconds before using /heal again.")
+        TriggerClientEvent('QBCore:Notify', source, "You must wait " .. remainingTime .. " seconds before using /heal again.", "error")
         return
     end
 
@@ -21,8 +18,8 @@ ESX.RegisterCommand('heal', 'user', function(xPlayer, args, showError)
     -- Trigger client event to heal the player
     TriggerClientEvent('heal:playerHeal', source)
 
-    xPlayer.showNotification("You have been healed!")
-end, false, {help = "Heal yourself", arguments = {}})
+    TriggerClientEvent('QBCore:Notify', source, "You have been healed!", "success")
+end, 'user')
 
 -- Cleanup cooldowns when player drops
 AddEventHandler('playerDropped', function(reason)

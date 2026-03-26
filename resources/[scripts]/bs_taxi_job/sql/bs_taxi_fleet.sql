@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS `bs_taxi_fleet` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `model` VARCHAR(60) NOT NULL,
   `plate` VARCHAR(12) NOT NULL,
+  `garage` VARCHAR(50) NOT NULL DEFAULT 'taxi',
   `fuel` FLOAT NOT NULL DEFAULT 100,
   `engine_health` FLOAT NOT NULL DEFAULT 1000,
   `body_health` FLOAT NOT NULL DEFAULT 1000,

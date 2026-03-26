@@ -1,6 +1,6 @@
 local QBCore = exports['qb-core']:GetCoreObject()
 
-local FleetTable = 'player_vehicles'
+local FleetTable = 'bs_taxi_fleet'
 local TaxiGarageName = 'taxi'
 local TaxiOwnerId = 'taxi_shared'
 
@@ -77,11 +77,11 @@ QBCore.Functions.CreateCallback('bs_taxi:server:getFleet', function(source, cb)
     end
 
     local rows = MySQL.query.await(
-        ('SELECT id, vehicle AS model, plate, fuel, engine AS engine_health, body AS body_health, CAST(state AS UNSIGNED) AS stored FROM %s WHERE garage = ? ORDER BY id ASC'):format(FleetTable),
+        ('SELECT id, model, plate, fuel, engine_health, body_health, stored FROM %s WHERE garage = ? ORDER BY id ASC'):format(FleetTable),
         { TaxiGarageName }
     )
     if rows == nil then
-        cb({ ok = false, message = 'Erreur BDD: table player_vehicles absente ?' })
+        cb({ ok = false, message = 'Erreur BDD: table bs_taxi_fleet absente ?' })
         return
     end
 
@@ -107,7 +107,7 @@ RegisterNetEvent('bs_taxi:server:buyUniqueVehicle', function()
         return
     end
 
-    local exists = MySQL.scalar.await(('SELECT COUNT(1) FROM %s WHERE vehicle = ? AND garage = ?'):format(FleetTable), { Config.UniqueGarageVehicle, TaxiGarageName })
+    local exists = MySQL.scalar.await(('SELECT COUNT(1) FROM %s WHERE model = ? AND garage = ?'):format(FleetTable), { Config.UniqueGarageVehicle, TaxiGarageName })
     if exists and exists > 0 then
         TriggerClientEvent('QBCore:Notify', src, 'Le véhicule unique est déjà acheté.', 'error')
         return
@@ -121,8 +121,8 @@ RegisterNetEvent('bs_taxi:server:buyUniqueVehicle', function()
     local plate = ('TAXI%s'):format(math.random(111, 999))
 
     MySQL.insert.await(
-        ('INSERT INTO %s (license, citizenid, vehicle, hash, mods, plate, garage, fuel, engine, body, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'):format(FleetTable),
-        { 'taxi', TaxiOwnerId, Config.UniqueGarageVehicle, joaat(Config.UniqueGarageVehicle), '{}', plate, TaxiGarageName, 100, 1000, 1000 }
+        ('INSERT INTO %s (model, plate, garage, fuel, engine_health, body_health, stored) VALUES (?, ?, ?, ?, ?, ?, 1)'):format(FleetTable),
+        { Config.UniqueGarageVehicle, plate, TaxiGarageName, 100, 1000, 1000 }
     )
 
     TriggerClientEvent('QBCore:Notify', src, ('Véhicule %s acheté (%s$).'):format(string.upper(Config.UniqueGarageVehicle), Config.VehiclePrice), 'success')
@@ -134,7 +134,7 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     if not ok then return end
 
     local row = MySQL.single.await(
-        ('SELECT id, vehicle AS model, plate, fuel, engine AS engine_health, body AS body_health, CAST(state AS UNSIGNED) AS stored FROM %s WHERE id = ? AND garage = ?'):format(FleetTable),
+        ('SELECT id, model, plate, fuel, engine_health, body_health, stored FROM %s WHERE id = ? AND garage = ?'):format(FleetTable),
         { vehicleId, TaxiGarageName }
     )
     if not row then
@@ -148,7 +148,7 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     end
 
     local claimed = MySQL.update.await(
-        ('UPDATE %s SET state = 0 WHERE id = ? AND CAST(state AS UNSIGNED) = 1'):format(FleetTable),
+        ('UPDATE %s SET stored = 0 WHERE id = ? AND stored = 1'):format(FleetTable),
         { vehicleId }
     )
     if (claimed or 0) < 1 then
@@ -159,7 +159,7 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     local coords = Config.GarageSpawn.coords
     local veh = CreateVehicleServerSetter(joaat(row.model), 'automobile', coords.x, coords.y, coords.z, coords.w)
     if veh == 0 then
-    MySQL.update.await(('UPDATE %s SET state = 1 WHERE id = ?'):format(FleetTable), { vehicleId })
+        MySQL.update.await(('UPDATE %s SET stored = 1 WHERE id = ?'):format(FleetTable), { vehicleId })
         TriggerClientEvent('QBCore:Notify', src, 'Impossible de sortir le véhicule.', 'error')
         return
     end
@@ -175,7 +175,7 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
 
     local netId = NetworkGetNetworkIdFromEntity(veh)
 
-    MySQL.update.await(('UPDATE %s SET state = 0, plate = ? WHERE id = ?'):format(FleetTable), { spawnedPlate, vehicleId })
+    MySQL.update.await(('UPDATE %s SET stored = 0, plate = ? WHERE id = ?'):format(FleetTable), { spawnedPlate, vehicleId })
     TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
     TriggerClientEvent('bs_taxi:client:vehicleSpawned', src, netId, row.fuel, spawnedPlate)
     grantKeysToPlayer(src, spawnedPlate)
@@ -203,7 +203,7 @@ RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, bo
     DeleteEntity(entity)
 
     MySQL.update.await(
-        ('UPDATE %s SET state = 1, fuel = ?, engine = ?, body = ?, garage = ? WHERE id = ?'):format(FleetTable),
+        ('UPDATE %s SET stored = 1, fuel = ?, engine_health = ?, body_health = ?, garage = ? WHERE id = ?'):format(FleetTable),
         { fuel, engine, body, TaxiGarageName, row.id }
     )
 
@@ -224,7 +224,7 @@ RegisterNetEvent('bs_taxi:server:recoverFleet', function()
     end
 
     local recovered = MySQL.update.await(
-        ('UPDATE %s SET state = 1 WHERE garage = ? AND CAST(state AS UNSIGNED) = 0'):format(FleetTable),
+        ('UPDATE %s SET stored = 1 WHERE garage = ? AND stored = 0'):format(FleetTable),
         { TaxiGarageName }
     ) or 0
 
@@ -250,7 +250,7 @@ RegisterNetEvent('bs_taxi:server:forceRecoverVehicle', function(vehicleId)
         return
     end
 
-    MySQL.update.await(('UPDATE %s SET state = 1 WHERE id = ? AND garage = ?'):format(FleetTable), { vehicleId, TaxiGarageName })
+    MySQL.update.await(('UPDATE %s SET stored = 1 WHERE id = ? AND garage = ?'):format(FleetTable), { vehicleId, TaxiGarageName })
     TriggerClientEvent('QBCore:Notify', src, ('Véhicule %s forcé au garage.'):format(row.plate), 'success')
 end)
 
