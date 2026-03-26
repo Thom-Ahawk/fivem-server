@@ -362,7 +362,7 @@ end)
 
 CreateThread(function()
     while true do
-        Wait(0)
+        local sleep = 500
         if inMission and missionPed then
             local pCoords = GetEntityCoords(PlayerPedId())
 
@@ -370,49 +370,54 @@ CreateThread(function()
                 local pickupCoords = vec3(missionPickup.x, missionPickup.y, missionPickup.z)
                 local dist = #(pCoords - pickupCoords)
 
-                if dist < 24.0 then
-                    DrawMarker(2, pickupCoords.x, pickupCoords.y, pickupCoords.z + 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.18, 0.18, 0.18, 255, 204, 0, 200, false, true, 2, nil, nil, false)
-                end
+                if dist < 50.0 then
+                    sleep = 0
+                    if dist < 24.0 then
+                        DrawMarker(2, pickupCoords.x, pickupCoords.y, pickupCoords.z + 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.18, 0.18, 0.18, 255, 204, 0, 200, false, true, 2, nil, nil, false)
+                    end
 
-                if dist < 8.0 then
-                    local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
-                    if vehicle ~= 0 then
-                        TaskEnterVehicle(missionPed, vehicle, -1, 2, 1.0, 1, 0)
-                        Wait(1500)
-                        hasPassenger = true
+                    if dist < 8.0 then
+                        local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
+                        if vehicle ~= 0 then
+                            TaskEnterVehicle(missionPed, vehicle, -1, 2, 1.0, 1, 0)
+                            Wait(1500)
+                            hasPassenger = true
 
-                        if DoesBlipExist(missionBlip) then RemoveBlip(missionBlip) end
-                        dropBlip = AddBlipForCoord(missionDropoff.x, missionDropoff.y, missionDropoff.z)
-                        SetBlipRoute(dropBlip, true)
-                        SetBlipRouteColour(dropBlip, 5)
-                        SetBlipSprite(dropBlip, 1)
+                            if DoesBlipExist(missionBlip) then RemoveBlip(missionBlip) end
+                            dropBlip = AddBlipForCoord(missionDropoff.x, missionDropoff.y, missionDropoff.z)
+                            SetBlipRoute(dropBlip, true)
+                            SetBlipRouteColour(dropBlip, 5)
+                            SetBlipSprite(dropBlip, 1)
 
-                        QBCore.Functions.Notify('Client monté. Dépose-le à destination.', 'success')
+                            QBCore.Functions.Notify('Client monté. Dépose-le à destination.', 'success')
+                        end
                     end
                 end
             else
                 local drop = vec3(missionDropoff.x, missionDropoff.y, missionDropoff.z)
                 local distDrop = #(pCoords - drop)
 
-                if distDrop < 20.0 then
-                    DrawMarker(1, drop.x, drop.y, drop.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.2, 2.2, 1.0, 255, 204, 0, 120, false, false, 2, nil, nil, false)
-                end
+                if distDrop < 50.0 then
+                    sleep = 0
+                    if distDrop < 20.0 then
+                        DrawMarker(1, drop.x, drop.y, drop.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.2, 2.2, 1.0, 255, 204, 0, 120, false, false, 2, nil, nil, false)
+                    end
 
-                if distDrop < 6.0 then
-                    TaskLeaveVehicle(missionPed, GetVehiclePedIsIn(PlayerPedId(), false), 0)
-                    Wait(1000)
-                    TaskWanderStandard(missionPed, 10.0, 10)
+                    if distDrop < 6.0 then
+                        TaskLeaveVehicle(missionPed, GetVehiclePedIsIn(PlayerPedId(), false), 0)
+                        Wait(1000)
+                        TaskWanderStandard(missionPed, 10.0, 10)
 
-                    local distance = #(vec3(missionPickup.x, missionPickup.y, missionPickup.z) - drop)
-                    TriggerServerEvent('bs_taxi:server:finishMission', distance)
+                        local distance = #(vec3(missionPickup.x, missionPickup.y, missionPickup.z) - drop)
+                        TriggerServerEvent('bs_taxi:server:finishMission', distance)
 
-                    canStartMissionAt = GetGameTimer() + (Config.MissionCooldown * 1000)
-                    clearMission()
+                        canStartMissionAt = GetGameTimer() + (Config.MissionCooldown * 1000)
+                        clearMission()
+                    end
                 end
             end
-        else
-            Wait(500)
         end
+        Wait(sleep)
     end
 end)
 
