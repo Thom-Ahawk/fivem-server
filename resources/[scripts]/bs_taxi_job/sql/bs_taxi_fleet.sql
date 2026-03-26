@@ -6,9 +6,7 @@ CREATE TABLE IF NOT EXISTS `bs_taxi_fleet` (
   `engine_health` FLOAT NOT NULL DEFAULT 1000,
   `body_health` FLOAT NOT NULL DEFAULT 1000,
   `stored` TINYINT(1) NOT NULL DEFAULT 1,
-  `net_id` INT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uniq_plate` (`plate`),
-  UNIQUE KEY `uniq_model` (`model`)
+  UNIQUE KEY `uniq_plate` (`plate`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

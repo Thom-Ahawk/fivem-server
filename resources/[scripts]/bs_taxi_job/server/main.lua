@@ -1,8 +1,7 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local ESX = exports['es_extended']:getSharedObject()
 
-local FleetTable = 'player_vehicles'
+local FleetTable = 'bs_taxi_fleet'
 local TaxiGarageName = 'taxi'
-local TaxiOwnerId = 'taxi_shared'
 
 local function normalizeStored(value)
     if value == true then return 1 end
@@ -16,42 +15,13 @@ local function normalizeStored(value)
 end
 
 local function isTaxi(src)
-    local player = QBCore.Functions.GetPlayer(src)
-    return player and player.PlayerData.job and player.PlayerData.job.name == Config.JobName, player
+    local xPlayer = ESX.GetPlayerFromId(src)
+    return xPlayer and xPlayer.job and xPlayer.job.name == Config.JobName, xPlayer
 end
 
-local function isBoss(player)
-    if not player then return false end
-    local grade = player.PlayerData.job.grade
-    if not grade then return false end
-    return grade.name == Config.BossGradeName or grade.level >= 4
-end
-
-local function grantKeysToPlayer(src, plate)
-    local finalPlate = string.gsub((plate or ''), '^%s*(.-)%s*$', '%1')
-    if finalPlate == '' then return end
-
-    local variants = {
-        finalPlate,
-        string.upper(finalPlate),
-        string.lower(finalPlate)
-    }
-
-    local sent = {}
-    for _, variant in ipairs(variants) do
-        if variant ~= '' and not sent[variant] then
-            sent[variant] = true
-            if GetResourceState('qb-vehiclekeys') == 'started' then
-                pcall(function()
-                    exports['qb-vehiclekeys']:GiveKeys(src, variant)
-                end)
-            end
-            TriggerClientEvent('qb-vehiclekeys:client:AddKeys', src, variant)
-            TriggerClientEvent('vehiclekeys:client:SetOwner', src, variant)
-        end
-    end
-
-    TriggerClientEvent('bs_taxi:client:grantSpawnedVehicleKeys', src, finalPlate)
+local function isBoss(xPlayer)
+    if not xPlayer then return false end
+    return xPlayer.job.grade_name == Config.BossGradeName or xPlayer.job.grade >= 3
 end
 
 local function formatVehicleRow(row)
@@ -69,7 +39,7 @@ local function formatVehicleRow(row)
     }
 end
 
-QBCore.Functions.CreateCallback('bs_taxi:server:getFleet', function(source, cb)
+ESX.RegisterServerCallback('bs_taxi:server:getFleet', function(source, cb)
     local isInTaxi = select(1, isTaxi(source))
     if not isInTaxi then
         cb({ ok = false, message = 'Tu n\'es pas taxi.' })
@@ -77,17 +47,15 @@ QBCore.Functions.CreateCallback('bs_taxi:server:getFleet', function(source, cb)
     end
 
     local rows = MySQL.query.await(
-        ('SELECT id, vehicle AS model, plate, fuel, engine AS engine_health, body AS body_health, CAST(state AS UNSIGNED) AS stored FROM %s WHERE garage = ? ORDER BY id ASC'):format(FleetTable),
-        { TaxiGarageName }
+        'SELECT id, model, plate, fuel, engine_health, body_health, stored FROM bs_taxi_fleet ORDER BY id ASC',
+        {}
     )
-    if rows == nil then
-        cb({ ok = false, message = 'Erreur BDD: table player_vehicles absente ?' })
-        return
-    end
 
     local list = {}
-    for _, row in ipairs(rows or {}) do
-        list[#list + 1] = formatVehicleRow(row)
+    if rows then
+        for _, row in ipairs(rows) do
+            list[#list + 1] = formatVehicleRow(row)
+        end
     end
 
     cb({ ok = true, vehicles = list, price = Config.VehiclePrice, uniqueModel = Config.UniqueGarageVehicle })
@@ -95,173 +63,181 @@ end)
 
 RegisterNetEvent('bs_taxi:server:buyUniqueVehicle', function()
     local src = source
-    local ok, player = isTaxi(src)
+    local ok, xPlayer = isTaxi(src)
 
     if not ok then
-        TriggerClientEvent('QBCore:Notify', src, 'Tu n\'es pas taxi.', 'error')
+        xPlayer.showNotification('Tu n\'es pas taxi.', 'error')
         return
     end
 
-    if not isBoss(player) then
-        TriggerClientEvent('QBCore:Notify', src, 'Seul le patron peut acheter.', 'error')
+    if not isBoss(xPlayer) then
+        xPlayer.showNotification('Seul le patron peut acheter.', 'error')
         return
     end
 
-    local exists = MySQL.scalar.await(('SELECT COUNT(1) FROM %s WHERE vehicle = ? AND garage = ?'):format(FleetTable), { Config.UniqueGarageVehicle, TaxiGarageName })
+    local exists = MySQL.scalar.await('SELECT COUNT(1) FROM bs_taxi_fleet WHERE model = ?', { Config.UniqueGarageVehicle })
     if exists and exists > 0 then
-        TriggerClientEvent('QBCore:Notify', src, 'Le véhicule unique est déjà acheté.', 'error')
+        xPlayer.showNotification('Le véhicule unique est déjà acheté.', 'error')
         return
     end
 
-    if not player.Functions.RemoveMoney('bank', Config.VehiclePrice, 'taxi-company-vehicle') then
-        TriggerClientEvent('QBCore:Notify', src, 'Fonds insuffisants en banque.', 'error')
+    local bankMoney = xPlayer.getAccount('bank').money
+    if bankMoney < Config.VehiclePrice then
+        xPlayer.showNotification('Fonds insuffisants en banque.', 'error')
         return
     end
+
+    xPlayer.removeAccountMoney('bank', Config.VehiclePrice)
 
     local plate = ('TAXI%s'):format(math.random(111, 999))
 
     MySQL.insert.await(
-        ('INSERT INTO %s (license, citizenid, vehicle, hash, mods, plate, garage, fuel, engine, body, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'):format(FleetTable),
-        { 'taxi', TaxiOwnerId, Config.UniqueGarageVehicle, joaat(Config.UniqueGarageVehicle), '{}', plate, TaxiGarageName, 100, 1000, 1000 }
+        'INSERT INTO bs_taxi_fleet (model, plate, fuel, engine_health, body_health, stored) VALUES (?, ?, ?, ?, ?, 1)',
+        { Config.UniqueGarageVehicle, plate, 100, 1000, 1000 }
     )
 
-    TriggerClientEvent('QBCore:Notify', src, ('Véhicule %s acheté (%s$).'):format(string.upper(Config.UniqueGarageVehicle), Config.VehiclePrice), 'success')
+    xPlayer.showNotification(('Véhicule %s acheté (%s$).'):format(string.upper(Config.UniqueGarageVehicle), Config.VehiclePrice), 'success')
 end)
 
 RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     local src = source
-    local ok = select(1, isTaxi(src))
+    local ok, xPlayer = isTaxi(src)
     if not ok then return end
 
     local row = MySQL.single.await(
-        ('SELECT id, vehicle AS model, plate, fuel, engine AS engine_health, body AS body_health, CAST(state AS UNSIGNED) AS stored FROM %s WHERE id = ? AND garage = ?'):format(FleetTable),
-        { vehicleId, TaxiGarageName }
+        'SELECT id, model, plate, fuel, engine_health, body_health, stored FROM bs_taxi_fleet WHERE id = ?',
+        { vehicleId }
     )
     if not row then
-        TriggerClientEvent('QBCore:Notify', src, 'Véhicule introuvable.', 'error')
+        xPlayer.showNotification('Véhicule introuvable.', 'error')
         return
     end
 
     if normalizeStored(row.stored) == 0 then
-        TriggerClientEvent('QBCore:Notify', src, 'Ce véhicule est déjà sorti.', 'error')
+        xPlayer.showNotification('Ce véhicule est déjà sorti.', 'error')
         return
     end
 
     local claimed = MySQL.update.await(
-        ('UPDATE %s SET state = 0 WHERE id = ? AND CAST(state AS UNSIGNED) = 1'):format(FleetTable),
+        'UPDATE bs_taxi_fleet SET stored = 0 WHERE id = ? AND stored = 1',
         { vehicleId }
     )
     if (claimed or 0) < 1 then
-        TriggerClientEvent('QBCore:Notify', src, 'Ce véhicule vient d\'être sorti par quelqu\'un.', 'error')
+        xPlayer.showNotification('Ce véhicule vient d\'être sorti par quelqu\'un.', 'error')
         return
     end
 
     local coords = Config.GarageSpawn.coords
     local veh = CreateVehicleServerSetter(joaat(row.model), 'automobile', coords.x, coords.y, coords.z, coords.w)
-    if veh == 0 then
-    MySQL.update.await(('UPDATE %s SET state = 1 WHERE id = ?'):format(FleetTable), { vehicleId })
-        TriggerClientEvent('QBCore:Notify', src, 'Impossible de sortir le véhicule.', 'error')
+
+    local timeout = 0
+    while not DoesEntityExist(veh) and timeout < 100 do
+        Wait(10)
+        timeout = timeout + 1
+    end
+
+    if not DoesEntityExist(veh) then
+        MySQL.update.await('UPDATE bs_taxi_fleet SET stored = 1 WHERE id = ?', { vehicleId })
+        xPlayer.showNotification('Impossible de sortir le véhicule.', 'error')
         return
     end
 
-    while not DoesEntityExist(veh) do Wait(10) end
-
     SetVehicleNumberPlateText(veh, row.plate)
-    local spawnedPlate = string.gsub(GetVehicleNumberPlateText(veh) or row.plate or '', '^%s*(.-)%s*$', '%1')
-    if spawnedPlate == '' then spawnedPlate = row.plate end
-    SetVehicleEngineHealth(veh, row.engine_health)
-    SetVehicleBodyHealth(veh, row.body_health)
-    Entity(veh).state.fuel = row.fuel
+    local spawnedPlate = GetVehicleNumberPlateText(veh)
+
+    SetVehicleEngineHealth(veh, row.engine_health + 0.0)
+    SetVehicleBodyHealth(veh, row.body_health + 0.0)
 
     local netId = NetworkGetNetworkIdFromEntity(veh)
 
-    MySQL.update.await(('UPDATE %s SET state = 0, plate = ? WHERE id = ?'):format(FleetTable), { spawnedPlate, vehicleId })
-    TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
     TriggerClientEvent('bs_taxi:client:vehicleSpawned', src, netId, row.fuel, spawnedPlate)
-    grantKeysToPlayer(src, spawnedPlate)
 end)
 
-RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, body)
+RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, plate, fuel, engine, body)
     local src = source
-    local ok = select(1, isTaxi(src))
+    local ok, xPlayer = isTaxi(src)
     if not ok then return end
 
     local entity = NetworkGetEntityFromNetworkId(netId)
     if entity == 0 then
-        TriggerClientEvent('QBCore:Notify', src, 'Véhicule invalide.', 'error')
+        xPlayer.showNotification('Véhicule invalide.', 'error')
         return
     end
 
-    local plate = string.gsub(GetVehicleNumberPlateText(entity), '^%s*(.-)%s*$', '%1')
+    local cleanPlate = string.gsub(plate, '^%s*(.-)%s*$', '%1')
+    local row = MySQL.single.await('SELECT id FROM bs_taxi_fleet WHERE plate = ?', { cleanPlate })
 
-    local row = MySQL.single.await(('SELECT id FROM %s WHERE plate = ? AND garage = ?'):format(FleetTable), { plate, TaxiGarageName })
     if not row then
-        TriggerClientEvent('QBCore:Notify', src, 'Ce véhicule ne fait pas partie de la flotte taxi.', 'error')
+        xPlayer.showNotification('Ce véhicule ne fait pas partie de la flotte taxi.', 'error')
         return
     end
 
     DeleteEntity(entity)
 
     MySQL.update.await(
-        ('UPDATE %s SET state = 1, fuel = ?, engine = ?, body = ?, garage = ? WHERE id = ?'):format(FleetTable),
-        { fuel, engine, body, TaxiGarageName, row.id }
+        'UPDATE bs_taxi_fleet SET stored = 1, fuel = ?, engine_health = ?, body_health = ? WHERE id = ?',
+        { fuel, engine, body, row.id }
     )
 
-    TriggerClientEvent('QBCore:Notify', src, 'Véhicule rangé.', 'success')
+    xPlayer.showNotification('Véhicule rangé.', 'success')
 end)
 
 RegisterNetEvent('bs_taxi:server:recoverFleet', function()
     local src = source
-    local ok, player = isTaxi(src)
+    local ok, xPlayer = isTaxi(src)
     if not ok then
-        TriggerClientEvent('QBCore:Notify', src, 'Tu n\'es pas taxi.', 'error')
+        xPlayer.showNotification('Tu n\'es pas taxi.', 'error')
         return
     end
 
-    if not isBoss(player) then
-        TriggerClientEvent('QBCore:Notify', src, 'Seul le patron peut forcer la récupération.', 'error')
+    if not isBoss(xPlayer) then
+        xPlayer.showNotification('Seul le patron peut forcer la récupération.', 'error')
         return
     end
 
     local recovered = MySQL.update.await(
-        ('UPDATE %s SET state = 1 WHERE garage = ? AND CAST(state AS UNSIGNED) = 0'):format(FleetTable),
-        { TaxiGarageName }
+        'UPDATE bs_taxi_fleet SET stored = 1 WHERE stored = 0',
+        {}
     ) or 0
 
-    TriggerClientEvent('QBCore:Notify', src, ('Récupération flotte terminée: %s véhicule(s).'):format(recovered), 'success')
+    xPlayer.showNotification(('Récupération flotte terminée: %s véhicule(s).'):format(recovered), 'success')
 end)
 
 RegisterNetEvent('bs_taxi:server:forceRecoverVehicle', function(vehicleId)
     local src = source
-    local ok, player = isTaxi(src)
+    local ok, xPlayer = isTaxi(src)
     if not ok then
-        TriggerClientEvent('QBCore:Notify', src, 'Tu n\'es pas taxi.', 'error')
+        xPlayer.showNotification('Tu n\'es pas taxi.', 'error')
         return
     end
 
-    if not isBoss(player) then
-        TriggerClientEvent('QBCore:Notify', src, 'Seul le patron peut forcer le retour.', 'error')
+    if not isBoss(xPlayer) then
+        xPlayer.showNotification('Seul le patron peut forcer le retour.', 'error')
         return
     end
 
-    local row = MySQL.single.await(('SELECT * FROM %s WHERE id = ?'):format(FleetTable), { vehicleId })
+    local row = MySQL.single.await('SELECT plate FROM bs_taxi_fleet WHERE id = ?', { vehicleId })
     if not row then
-        TriggerClientEvent('QBCore:Notify', src, 'Véhicule introuvable.', 'error')
+        xPlayer.showNotification('Véhicule introuvable.', 'error')
         return
     end
 
-    MySQL.update.await(('UPDATE %s SET state = 1 WHERE id = ? AND garage = ?'):format(FleetTable), { vehicleId, TaxiGarageName })
-    TriggerClientEvent('QBCore:Notify', src, ('Véhicule %s forcé au garage.'):format(row.plate), 'success')
+    MySQL.update.await('UPDATE bs_taxi_fleet SET stored = 1 WHERE id = ?', { vehicleId })
+    xPlayer.showNotification(('Véhicule %s forcé au garage.'):format(row.plate), 'success')
 end)
 
 RegisterNetEvent('bs_taxi:server:finishMission', function(distance)
     local src = source
-    local ok, player = isTaxi(src)
+    local ok, xPlayer = isTaxi(src)
     if not ok then return end
 
     local km = math.max(0.1, distance / 1000.0)
     local reward = math.floor(Config.PaymentBase + (Config.PaymentPerKm * km))
-    player.Functions.AddMoney('cash', reward, 'taxi-npc-mission')
 
-    TriggerClientEvent('QBCore:Notify', src, ('Course terminée : +%s$'):format(reward), 'success')
+    xPlayer.addAccountMoney('money', reward)
+    xPlayer.showNotification(('Course terminée : +%s$'):format(reward), 'success')
 end)
+
+-- Future Mission Expansion Logic
+-- Missions could be stored in a table and assigned to players
+-- We could add a 'level' or 'experience' system for drivers
