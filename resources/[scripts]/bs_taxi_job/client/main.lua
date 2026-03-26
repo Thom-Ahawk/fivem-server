@@ -139,14 +139,19 @@ end)
 RegisterNUICallback('storeCurrentVehicle', function(_, cb)
     local ped = PlayerPedId()
     local veh = GetVehiclePedIsIn(ped, false)
+
     if veh == 0 then
-        QBCore.Functions.Notify('Tu dois être dans le véhicule à ranger.', 'error')
-        cb('ok')
-        return
+        local coords = GetEntityCoords(ped)
+        veh = QBCore.Functions.GetClosestVehicle(coords)
+        if veh == 0 or #(coords - GetEntityCoords(veh)) > 8.0 then
+            QBCore.Functions.Notify('Aucun véhicule taxi à proximité.', 'error')
+            cb('ok')
+            return
+        end
     end
 
     local netId = NetworkGetNetworkIdFromEntity(veh)
-    local fuel = Entity(veh).state.fuel or 100.0
+    local fuel = Entity(veh).state.fuel or GetVehicleFuelLevel(veh) or 100.0
     local engine = GetVehicleEngineHealth(veh)
     local body = GetVehicleBodyHealth(veh)
     TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
@@ -170,7 +175,7 @@ RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
     local veh = ensureEntityFromNetId(netId, 4000)
     if veh == 0 then return end
 
-    SetVehicleDoorsLocked(veh, 1)
+    SetVehicleDoorsLocked(veh, 2) -- Sortie verrouillée
     SetVehicleDoorsLockedForAllPlayers(veh, false)
     SetVehicleNeedsToBeHotwired(veh, false)
     SetVehicleFuelLevel(veh, fuel)
@@ -184,7 +189,7 @@ RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
         finalPlate = plate or GetVehicleNumberPlateText(veh)
     end
     finalPlate = string.gsub(finalPlate or '', '^%s*(.-)%s*$', '%1')
-    TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
+    TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
     tryGiveKeys(veh, finalPlate)
 
     for i = 1, 5 do
@@ -196,7 +201,7 @@ RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
     end
     SetTimeout(1200, syncKeysFromServer)
 
-    QBCore.Functions.Notify(('Clés du véhicule %s attribuées.'):format(finalPlate), 'success')
+    QBCore.Functions.Notify(('Clés du véhicule %s attribuées. Il est verrouillé.'):format(finalPlate), 'success')
 end)
 
 RegisterNetEvent('bs_taxi:client:grantSpawnedVehicleKeys', function(plate)
@@ -210,6 +215,16 @@ RegisterNetEvent('bs_taxi:client:grantSpawnedVehicleKeys', function(plate)
         end)
     end
     SetTimeout(1200, syncKeysFromServer)
+end)
+
+RegisterNetEvent('bs_taxi:client:forceExitVehicle', function(netId)
+    local veh = NetToVeh(netId)
+    if veh ~= 0 and DoesEntityExist(veh) then
+        local ped = PlayerPedId()
+        if GetVehiclePedIsIn(ped, false) == veh then
+            TaskLeaveVehicle(ped, veh, 0)
+        end
+    end
 end)
 
 local function choosePickupDropoff()
@@ -280,12 +295,12 @@ end
 CreateThread(function()
     createMainBlips()
 
-    exports['qb-target']:AddBoxZone("TaxiGarage", Config.Blips.Garage.coords, 2.0, 2.0, {
+    exports['qb-target']:AddBoxZone("TaxiGarage", Config.Blips.Garage.coords, 25.0, 25.0, { -- Zone élargie
         name = "TaxiGarage",
         heading = 0,
         debugPoly = false,
-        minZ = Config.Blips.Garage.coords.z - 1.0,
-        maxZ = Config.Blips.Garage.coords.z + 1.0,
+        minZ = Config.Blips.Garage.coords.z - 2.0,
+        maxZ = Config.Blips.Garage.coords.z + 5.0,
     }, {
         options = {
             {
@@ -299,11 +314,11 @@ CreateThread(function()
                 type = "client",
                 event = "bs_taxi:client:storeVehicle",
                 icon = "fas fa-car",
-                label = "Ranger Véhicule",
+                label = "Enregistrer véhicule (reste dehors)",
                 job = Config.JobName,
             },
         },
-        distance = 2.5
+        distance = 15.0
     })
 
     exports['qb-target']:AddBoxZone("TaxiMissions", Config.Blips.Mission.coords, 2.0, 2.0, {
@@ -339,13 +354,18 @@ end)
 RegisterNetEvent('bs_taxi:client:storeVehicle', function()
     local ped = PlayerPedId()
     local veh = GetVehiclePedIsIn(ped, false)
+
     if veh == 0 then
-        QBCore.Functions.Notify('Tu dois être dans le véhicule à ranger.', 'error')
-        return
+        local coords = GetEntityCoords(ped)
+        veh = QBCore.Functions.GetClosestVehicle(coords)
+        if veh == 0 or #(coords - GetEntityCoords(veh)) > 8.0 then
+            QBCore.Functions.Notify('Aucun véhicule taxi à proximité.', 'error')
+            return
+        end
     end
 
     local netId = NetworkGetNetworkIdFromEntity(veh)
-    local fuel = Entity(veh).state.fuel or 100.0
+    local fuel = Entity(veh).state.fuel or GetVehicleFuelLevel(veh) or 100.0
     local engine = GetVehicleEngineHealth(veh)
     local body = GetVehicleBodyHealth(veh)
     TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)

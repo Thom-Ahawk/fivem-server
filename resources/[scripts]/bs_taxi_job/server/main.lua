@@ -70,8 +70,8 @@ local function formatVehicleRow(row)
 end
 
 QBCore.Functions.CreateCallback('bs_taxi:server:getFleet', function(source, cb)
-    local isInTaxi = select(1, isTaxi(source))
-    if not isInTaxi then
+    local ok = isTaxi(source)
+    if not ok then
         cb({ ok = false, message = 'Tu n\'es pas taxi.' })
         return
     end
@@ -130,7 +130,7 @@ end)
 
 RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     local src = source
-    local ok = select(1, isTaxi(src))
+    local ok = isTaxi(src)
     if not ok then return end
 
     local row = MySQL.single.await(
@@ -145,6 +145,17 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     if normalizeStored(row.stored) == 0 then
         TriggerClientEvent('QBCore:Notify', src, 'Ce véhicule est déjà sorti.', 'error')
         return
+    end
+
+    -- Vérifier si le véhicule existe déjà physiquement pour éviter les doublons
+    local vehicles = GetAllVehicles()
+    local rowPlate = string.gsub(row.plate or '', '^%s*(.-)%s*$', '%1')
+    for _, v in ipairs(vehicles) do
+        local plate = string.gsub(GetVehicleNumberPlateText(v) or '', '^%s*(.-)%s*$', '%1')
+        if plate == rowPlate then
+            TriggerClientEvent('QBCore:Notify', src, 'Ce véhicule est déjà présent dehors.', 'error')
+            return
+        end
     end
 
     local claimed = MySQL.update.await(
@@ -176,14 +187,14 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     local netId = NetworkGetNetworkIdFromEntity(veh)
 
     MySQL.update.await(('UPDATE %s SET stored = 0, plate = ? WHERE id = ?'):format(FleetTable), { spawnedPlate, vehicleId })
-    TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
+    TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2) -- Spawn verrouillé
     TriggerClientEvent('bs_taxi:client:vehicleSpawned', src, netId, row.fuel, spawnedPlate)
     grantKeysToPlayer(src, spawnedPlate)
 end)
 
 RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, body)
     local src = source
-    local ok = select(1, isTaxi(src))
+    local ok = isTaxi(src)
     if not ok then return end
 
     local entity = NetworkGetEntityFromNetworkId(netId)
@@ -200,14 +211,20 @@ RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, bo
         return
     end
 
-    DeleteEntity(entity)
+    -- Au lieu de supprimer, on verrouille et on met à jour l'état
+    SetVehicleDoorsLocked(entity, 2)
+    -- On force les passagers à sortir si nécessaire
+    local driver = GetPedInVehicleSeat(entity, -1)
+    if driver > 0 then
+        TriggerClientEvent('bs_taxi:client:forceExitVehicle', -1, netId)
+    end
 
     MySQL.update.await(
         ('UPDATE %s SET stored = 1, fuel = ?, engine_health = ?, body_health = ?, garage = ? WHERE id = ?'):format(FleetTable),
         { fuel, engine, body, TaxiGarageName, row.id }
     )
 
-    TriggerClientEvent('QBCore:Notify', src, 'Véhicule rangé.', 'success')
+    TriggerClientEvent('QBCore:Notify', src, 'Véhicule enregistré (reste dehors).', 'success')
 end)
 
 RegisterNetEvent('bs_taxi:server:recoverFleet', function()
