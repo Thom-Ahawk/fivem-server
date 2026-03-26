@@ -11,41 +11,6 @@ local missionStartTime = 0
 local canStartMissionAt = 0
 
 local garageOpen = false
-local warnedInvalidCoords = {}
-
-local fallbackCoords = {
-    Garage = vec3(900.1, -179.2, 73.9),
-    Mission = vec3(908.7, -163.4, 74.1)
-}
-
-local function getSafeCoord(key)
-    local cfg = Config.Blips and Config.Blips[key] and Config.Blips[key].coords
-    if cfg and cfg.x and cfg.y and cfg.z then
-        return cfg
-    end
-
-    if not warnedInvalidCoords[key] then
-        warnedInvalidCoords[key] = true
-        print(('[bs_taxi_job] Coordonnées invalides pour %s, fallback par défaut utilisé.'):format(key))
-    end
-
-    return fallbackCoords[key]
-end
-
-local function drawTxt3D(coords, text)
-    SetTextScale(0.32, 0.32)
-    SetTextFont(4)
-    SetTextProportional(1)
-    SetTextColour(255, 255, 255, 215)
-    SetTextEntry('STRING')
-    SetTextCentre(true)
-    AddTextComponentString(text)
-    SetDrawOrigin(coords.x, coords.y, coords.z, 0)
-    DrawText(0.0, 0.0)
-    local factor = #text / 370
-    DrawRect(0.0, 0.0125, 0.017 + factor, 0.03, 0, 0, 0, 75)
-    ClearDrawOrigin()
-end
 
 local function isTaxi()
     local data = QBCore.Functions.GetPlayerData()
@@ -112,7 +77,6 @@ local function tryGiveKeys(veh, plate)
     for _, variant in ipairs(variants) do
         if variant ~= '' and not sent[variant] then
             sent[variant] = true
-            -- qb-vehiclekeys attendu: acquisition serveur + fallback compat ancien event
             TriggerServerEvent('qb-vehiclekeys:server:AcquireVehicleKeys', variant)
             TriggerEvent('vehiclekeys:client:SetOwner', variant)
             TriggerEvent('qb-vehiclekeys:client:AddKeys', variant)
@@ -223,7 +187,6 @@ RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
     TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
     tryGiveKeys(veh, finalPlate)
 
-    -- Retry anti-race (qb-vehiclekeys peut init en retard au spawn réseau)
     for i = 1, 5 do
         SetTimeout(i * 400, function()
             if DoesEntityExist(veh) then
@@ -317,47 +280,79 @@ end
 CreateThread(function()
     createMainBlips()
 
-    while true do
-        local sleep = 1200
-        local ped = PlayerPedId()
-        local pos = GetEntityCoords(ped)
+    exports['qb-target']:AddBoxZone("TaxiGarage", Config.Blips.Garage.coords, 2.0, 2.0, {
+        name = "TaxiGarage",
+        heading = 0,
+        debugPoly = false,
+        minZ = Config.Blips.Garage.coords.z - 1.0,
+        maxZ = Config.Blips.Garage.coords.z + 1.0,
+    }, {
+        options = {
+            {
+                type = "client",
+                event = "bs_taxi:client:openGarage",
+                icon = "fas fa-warehouse",
+                label = "Garage Taxi",
+                job = Config.JobName,
+            },
+            {
+                type = "client",
+                event = "bs_taxi:client:storeVehicle",
+                icon = "fas fa-car",
+                label = "Ranger Véhicule",
+                job = Config.JobName,
+            },
+        },
+        distance = 2.5
+    })
 
-        local garageCoords = getSafeCoord('Garage')
-        local garageDist = #(pos - garageCoords)
-        if garageDist < 12.0 then
-            sleep = 0
-            DrawMarker(1, garageCoords.x, garageCoords.y, garageCoords.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 0.5, 255, 204, 0, 120, false, false, 2, nil, nil, false)
-        end
-        if garageDist < 3.0 then
-            sleep = 0
-            drawTxt3D(garageCoords + vec3(0.0, 0.0, 1.0), '[E] Ouvrir tablette garage')
-            if IsControlJustReleased(0, 38) and not garageOpen then
-                QBCore.Functions.TriggerCallback('bs_taxi:server:getFleet', function(data)
-                    if not data.ok then
-                        QBCore.Functions.Notify(data.message, 'error')
-                        return
-                    end
-                    openTablet(data)
-                end)
-            end
-        end
+    exports['qb-target']:AddBoxZone("TaxiMissions", Config.Blips.Mission.coords, 2.0, 2.0, {
+        name = "TaxiMissions",
+        heading = 0,
+        debugPoly = false,
+        minZ = Config.Blips.Mission.coords.z - 1.0,
+        maxZ = Config.Blips.Mission.coords.z + 1.0,
+    }, {
+        options = {
+            {
+                type = "client",
+                event = "bs_taxi:client:startMission",
+                icon = "fas fa-taxi",
+                label = "Missions Taxi",
+                job = Config.JobName,
+            },
+        },
+        distance = 2.5
+    })
+end)
 
-        local missionCoords = getSafeCoord('Mission')
-        local missionDist = #(pos - missionCoords)
-        if missionDist < 12.0 then
-            sleep = 0
-            DrawMarker(1, missionCoords.x, missionCoords.y, missionCoords.z - 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 0.5, 255, 204, 0, 120, false, false, 2, nil, nil, false)
+RegisterNetEvent('bs_taxi:client:openGarage', function()
+    QBCore.Functions.TriggerCallback('bs_taxi:server:getFleet', function(data)
+        if not data.ok then
+            QBCore.Functions.Notify(data.message, 'error')
+            return
         end
-        if missionDist < 3.0 then
-            sleep = 0
-            drawTxt3D(missionCoords + vec3(0.0, 0.0, 1.0), '[E] Lancer mission taxi PNJ')
-            if IsControlJustReleased(0, 38) then
-                startMission()
-            end
-        end
+        openTablet(data)
+    end)
+end)
 
-        Wait(sleep)
+RegisterNetEvent('bs_taxi:client:storeVehicle', function()
+    local ped = PlayerPedId()
+    local veh = GetVehiclePedIsIn(ped, false)
+    if veh == 0 then
+        QBCore.Functions.Notify('Tu dois être dans le véhicule à ranger.', 'error')
+        return
     end
+
+    local netId = NetworkGetNetworkIdFromEntity(veh)
+    local fuel = Entity(veh).state.fuel or 100.0
+    local engine = GetVehicleEngineHealth(veh)
+    local body = GetVehicleBodyHealth(veh)
+    TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
+end)
+
+RegisterNetEvent('bs_taxi:client:startMission', function()
+    startMission()
 end)
 
 CreateThread(function()

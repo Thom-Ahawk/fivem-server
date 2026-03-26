@@ -121,8 +121,8 @@ RegisterNetEvent('bs_taxi:server:buyUniqueVehicle', function()
     local plate = ('TAXI%s'):format(math.random(111, 999))
 
     MySQL.insert.await(
-        ('INSERT INTO %s (model, plate, garage, fuel, engine_health, body_health, stored) VALUES (?, ?, ?, ?, ?, ?, 1)'):format(FleetTable),
-        { Config.UniqueGarageVehicle, plate, TaxiGarageName, 100, 1000, 1000 }
+        ('INSERT INTO %s (model, plate, garage, fuel, engine_health, body_health, stored, hash, mods) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)'):format(FleetTable),
+        { Config.UniqueGarageVehicle, plate, TaxiGarageName, 100, 1000, 1000, joaat(Config.UniqueGarageVehicle), '{}' }
     )
 
     TriggerClientEvent('QBCore:Notify', src, ('Véhicule %s acheté (%s$).'):format(string.upper(Config.UniqueGarageVehicle), Config.VehiclePrice), 'success')
