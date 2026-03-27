@@ -4,8 +4,8 @@ game 'gta5'
 lua54 'yes'
 
 author 'GPT-5.3-Codex'
-description 'QBCore taxi job with NPC missions and simplified garage'
-version '1.1.0'
+description 'QBCore taxi job with NPC missions and fleet tablet garage'
+version '1.0.0'
 
 shared_scripts {
     '@qb-core/shared/locale.lua',
@@ -19,4 +19,10 @@ client_scripts {
 server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/main.lua'
+}
+
+ui_page 'html/index.html'
+
+files {
+    'html/index.html'
 }

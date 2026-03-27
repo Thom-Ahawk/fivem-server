@@ -20,6 +20,13 @@ local function isTaxi(src)
     return player and player.PlayerData.job and player.PlayerData.job.name == Config.JobName, player
 end
 
+local function isBoss(player)
+    if not player then return false end
+    local grade = player.PlayerData.job.grade
+    if not grade then return false end
+    return grade.name == Config.BossGradeName or grade.level >= 4
+end
+
 local function grantKeysToPlayer(src, plate)
     local finalPlate = string.gsub((plate or ''), '^%s*(.-)%s*$', '%1')
     if finalPlate == '' then return end
@@ -84,6 +91,41 @@ QBCore.Functions.CreateCallback('bs_taxi:server:getFleet', function(source, cb)
     end
 
     cb({ ok = true, vehicles = list, price = Config.VehiclePrice, uniqueModel = Config.UniqueGarageVehicle })
+end)
+
+RegisterNetEvent('bs_taxi:server:buyUniqueVehicle', function()
+    local src = source
+    local ok, player = isTaxi(src)
+
+    if not ok then
+        TriggerClientEvent('QBCore:Notify', src, 'Tu n\'es pas taxi.', 'error')
+        return
+    end
+
+    if not isBoss(player) then
+        TriggerClientEvent('QBCore:Notify', src, 'Seul le patron peut acheter.', 'error')
+        return
+    end
+
+    local exists = MySQL.scalar.await(('SELECT COUNT(1) FROM %s WHERE model = ? AND garage = ?'):format(FleetTable), { Config.UniqueGarageVehicle, TaxiGarageName })
+    if exists and exists > 0 then
+        TriggerClientEvent('QBCore:Notify', src, 'Le véhicule unique est déjà acheté.', 'error')
+        return
+    end
+
+    if not player.Functions.RemoveMoney('bank', Config.VehiclePrice, 'taxi-company-vehicle') then
+        TriggerClientEvent('QBCore:Notify', src, 'Fonds insuffisants en banque.', 'error')
+        return
+    end
+
+    local plate = ('TAXI%s'):format(math.random(111, 999))
+
+    MySQL.insert.await(
+        ('INSERT INTO %s (model, plate, garage, fuel, engine_health, body_health, stored, hash, mods) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)'):format(FleetTable),
+        { Config.UniqueGarageVehicle, plate, TaxiGarageName, 100, 1000, 1000, joaat(Config.UniqueGarageVehicle), '{}' }
+    )
+
+    TriggerClientEvent('QBCore:Notify', src, ('Véhicule %s acheté (%s$).'):format(string.upper(Config.UniqueGarageVehicle), Config.VehiclePrice), 'success')
 end)
 
 RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
@@ -180,6 +222,50 @@ RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, bo
     )
 
     TriggerClientEvent('QBCore:Notify', src, 'Véhicule rangé.', 'success')
+end)
+
+RegisterNetEvent('bs_taxi:server:recoverFleet', function()
+    local src = source
+    local ok, player = isTaxi(src)
+    if not ok then
+        TriggerClientEvent('QBCore:Notify', src, 'Tu n\'es pas taxi.', 'error')
+        return
+    end
+
+    if not isBoss(player) then
+        TriggerClientEvent('QBCore:Notify', src, 'Seul le patron peut forcer la récupération.', 'error')
+        return
+    end
+
+    local recovered = MySQL.update.await(
+        ('UPDATE %s SET stored = 1 WHERE garage = ? AND stored = 0'):format(FleetTable),
+        { TaxiGarageName }
+    ) or 0
+
+    TriggerClientEvent('QBCore:Notify', src, ('Récupération flotte terminée: %s véhicule(s).'):format(recovered), 'success')
+end)
+
+RegisterNetEvent('bs_taxi:server:forceRecoverVehicle', function(vehicleId)
+    local src = source
+    local ok, player = isTaxi(src)
+    if not ok then
+        TriggerClientEvent('QBCore:Notify', src, 'Tu n\'es pas taxi.', 'error')
+        return
+    end
+
+    if not isBoss(player) then
+        TriggerClientEvent('QBCore:Notify', src, 'Seul le patron peut forcer le retour.', 'error')
+        return
+    end
+
+    local row = MySQL.single.await(('SELECT * FROM %s WHERE id = ?'):format(FleetTable), { vehicleId })
+    if not row then
+        TriggerClientEvent('QBCore:Notify', src, 'Véhicule introuvable.', 'error')
+        return
+    end
+
+    MySQL.update.await(('UPDATE %s SET stored = 1 WHERE id = ? AND garage = ?'):format(FleetTable), { vehicleId, TaxiGarageName })
+    TriggerClientEvent('QBCore:Notify', src, ('Véhicule %s forcé au garage.'):format(row.plate), 'success')
 end)
 
 RegisterNetEvent('bs_taxi:server:finishMission', function(distance)
