@@ -10,8 +10,6 @@ local hasPassenger = false
 local missionStartTime = 0
 local canStartMissionAt = 0
 
-local garageOpen = false
-
 local function isTaxi()
     local data = QBCore.Functions.GetPlayerData()
     return data.job and data.job.name == Config.JobName
@@ -38,25 +36,6 @@ local function createMainBlips()
         EndTextCommandSetBlipName(blip)
         ::continue::
     end
-end
-
-local function openTablet(data)
-    local vehicles = {}
-    if type(data.vehicles) == 'table' then
-        vehicles = data.vehicles
-    end
-
-    SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = 'open',
-        payload = {
-            vehicles = vehicles,
-            price = data.price,
-            uniqueModel = data.uniqueModel,
-            theme = Config.TabletTheme
-        }
-    })
-    garageOpen = true
 end
 
 local function tryGiveKeys(veh, plate)
@@ -110,38 +89,89 @@ local function ensureEntityFromNetId(netId, timeoutMs)
     return 0
 end
 
-local function refreshTablet()
-    if not garageOpen then return end
-    QBCore.Functions.TriggerCallback('bs_taxi:server:getFleet', function(data)
-        if not data or not data.ok then return end
-        openTablet(data)
-    end)
+local function openGarageMenu()
+    local garageMenu = {
+        {
+            header = "Garage Taxi",
+            isMenuHeader = true,
+        },
+        {
+            header = "Sortir un véhicule",
+            txt = "Voir les véhicules disponibles",
+            params = {
+                event = "bs_taxi:client:spawnMenu",
+            }
+        },
+        {
+            header = "Ranger mon véhicule",
+            txt = "Ranger le véhicule actuel au garage",
+            params = {
+                event = "bs_taxi:client:storeVehicle",
+            }
+        },
+        {
+            header = "Fermer",
+            params = {
+                event = "qb-menu:client:closeMenu",
+            }
+        },
+    }
+    exports['qb-menu']:openMenu(garageMenu)
 end
 
-RegisterNUICallback('close', function(_, cb)
-    SetNuiFocus(false, false)
-    garageOpen = false
-    cb('ok')
+RegisterNetEvent('bs_taxi:client:spawnMenu', function()
+    QBCore.Functions.TriggerCallback('bs_taxi:server:getFleet', function(data)
+        if not data or not data.ok then
+            QBCore.Functions.Notify("Erreur lors de la récupération de la flotte", "error")
+            return
+        end
+
+        local spawnMenu = {
+            {
+                header = "< Retour",
+                params = {
+                    event = "bs_taxi:client:openGarage",
+                }
+            }
+        }
+
+        local hasVehicles = false
+        for _, v in ipairs(data.vehicles) do
+            if v.stored then
+                hasVehicles = true
+                table.insert(spawnMenu, {
+                    header = v.plate .. " - " .. v.model:upper(),
+                    txt = string.format("Essence: %d%% | Moteur: %d", v.fuel, v.engine),
+                    params = {
+                        isServer = true,
+                        event = "bs_taxi:server:spawnVehicle",
+                        args = v.id
+                    }
+                })
+            end
+        end
+
+        if not hasVehicles then
+            table.insert(spawnMenu, {
+                header = "Aucun véhicule disponible",
+                txt = "Tous les véhicules sont déjà sortis.",
+                isMenuHeader = true
+            })
+        end
+
+        exports['qb-menu']:openMenu(spawnMenu)
+    end)
 end)
 
-RegisterNUICallback('buyUniqueVehicle', function(_, cb)
-    TriggerServerEvent('bs_taxi:server:buyUniqueVehicle')
-    SetTimeout(250, refreshTablet)
-    cb('ok')
+RegisterNetEvent('bs_taxi:client:openGarage', function()
+    openGarageMenu()
 end)
 
-RegisterNUICallback('spawnVehicle', function(data, cb)
-    TriggerServerEvent('bs_taxi:server:spawnVehicle', tonumber(data.id))
-    SetTimeout(250, refreshTablet)
-    cb('ok')
-end)
-
-RegisterNUICallback('storeCurrentVehicle', function(_, cb)
+RegisterNetEvent('bs_taxi:client:storeVehicle', function()
     local ped = PlayerPedId()
     local veh = GetVehiclePedIsIn(ped, false)
     if veh == 0 then
         QBCore.Functions.Notify('Tu dois être dans le véhicule à ranger.', 'error')
-        cb('ok')
         return
     end
 
@@ -157,20 +187,6 @@ RegisterNUICallback('storeCurrentVehicle', function(_, cb)
     local engine = GetVehicleEngineHealth(veh)
     local body = GetVehicleBodyHealth(veh)
     TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
-    SetTimeout(250, refreshTablet)
-    cb('ok')
-end)
-
-RegisterNUICallback('recoverFleet', function(_, cb)
-    TriggerServerEvent('bs_taxi:server:recoverFleet')
-    SetTimeout(250, refreshTablet)
-    cb('ok')
-end)
-
-RegisterNUICallback('forceRecoverVehicle', function(data, cb)
-    TriggerServerEvent('bs_taxi:server:forceRecoverVehicle', tonumber(data.id))
-    SetTimeout(250, refreshTablet)
-    cb('ok')
 end)
 
 RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
@@ -284,89 +300,52 @@ local function startMission()
     QBCore.Functions.Notify('Va chercher le client PNJ.', 'primary')
 end
 
-CreateThread(function()
-    createMainBlips()
-
-    exports['qb-target']:AddBoxZone("TaxiGarage", Config.Blips.Garage.coords, 10.0, 10.0, {
-        name = "TaxiGarage",
-        heading = 0,
-        debugPoly = false,
-        minZ = Config.Blips.Garage.coords.z - 1.0,
-        maxZ = Config.Blips.Garage.coords.z + 1.0,
-    }, {
-        options = {
-            {
-                type = "client",
-                event = "bs_taxi:client:openGarage",
-                icon = "fas fa-warehouse",
-                label = "Garage Taxi",
-                job = Config.JobName,
-            },
-            {
-                type = "client",
-                event = "bs_taxi:client:storeVehicle",
-                icon = "fas fa-car",
-                label = "Ranger Véhicule",
-                job = Config.JobName,
-            },
-        },
-        distance = 2.5
-    })
-
-    exports['qb-target']:AddBoxZone("TaxiMissions", Config.Blips.Mission.coords, 10.0, 10.0, {
-        name = "TaxiMissions",
-        heading = 0,
-        debugPoly = false,
-        minZ = Config.Blips.Mission.coords.z - 1.0,
-        maxZ = Config.Blips.Mission.coords.z + 1.0,
-    }, {
-        options = {
-            {
-                type = "client",
-                event = "bs_taxi:client:startMission",
-                icon = "fas fa-taxi",
-                label = "Missions Taxi",
-                job = Config.JobName,
-            },
-        },
-        distance = 2.5
-    })
-end)
-
-RegisterNetEvent('bs_taxi:client:openGarage', function()
-    QBCore.Functions.TriggerCallback('bs_taxi:server:getFleet', function(data)
-        if not data.ok then
-            QBCore.Functions.Notify(data.message, 'error')
-            return
-        end
-        openTablet(data)
-    end)
-end)
-
-RegisterNetEvent('bs_taxi:client:storeVehicle', function()
-    local ped = PlayerPedId()
-    local veh = GetVehiclePedIsIn(ped, false)
-    if veh == 0 then
-        QBCore.Functions.Notify('Tu dois être dans le véhicule à ranger.', 'error')
-        return
-    end
-
-    for i = -1, 5 do
-        local occupant = GetPedInVehicleSeat(veh, i)
-        if occupant ~= 0 then
-            TaskLeaveVehicle(occupant, veh, 0)
-        end
-    end
-
-    local netId = NetworkGetNetworkIdFromEntity(veh)
-    local fuel = Entity(veh).state.fuel or 100.0
-    local engine = GetVehicleEngineHealth(veh)
-    local body = GetVehicleBodyHealth(veh)
-    TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
-end)
-
 RegisterNetEvent('bs_taxi:client:startMission', function()
     startMission()
+end)
+
+CreateThread(function()
+    createMainBlips()
+end)
+
+-- Loop for Interactions (Key E)
+CreateThread(function()
+    while true do
+        local sleep = 1000
+        if isTaxi() then
+            local ped = PlayerPedId()
+            local pCoords = GetEntityCoords(ped)
+
+            -- Garage
+            local gCoords = Config.Blips.Garage.coords
+            local distG = #(pCoords - gCoords)
+            if distG < 10.0 then
+                sleep = 0
+                DrawMarker(2, gCoords.x, gCoords.y, gCoords.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 255, 204, 0, 150, false, true, 2, nil, nil, false)
+                if distG < 2.0 then
+                    QBCore.Functions.DrawText3D(gCoords.x, gCoords.y, gCoords.z + 0.3, "[~g~E~w~] - Garage Taxi")
+                    if IsControlJustReleased(0, 38) then -- E
+                        openGarageMenu()
+                    end
+                end
+            end
+
+            -- Missions
+            local mCoords = Config.Blips.Mission.coords
+            local distM = #(pCoords - mCoords)
+            if distM < 10.0 then
+                sleep = 0
+                DrawMarker(2, mCoords.x, mCoords.y, mCoords.z, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 255, 204, 0, 150, false, true, 2, nil, nil, false)
+                if distM < 2.0 then
+                    QBCore.Functions.DrawText3D(mCoords.x, mCoords.y, mCoords.z + 0.3, "[~g~E~w~] - Missions Taxi")
+                    if IsControlJustReleased(0, 38) then -- E
+                        startMission()
+                    end
+                end
+            end
+        end
+        Wait(sleep)
+    end
 end)
 
 CreateThread(function()
@@ -437,6 +416,5 @@ end)
 
 AddEventHandler('onResourceStop', function(res)
     if res ~= GetCurrentResourceName() then return end
-    SetNuiFocus(false, false)
     clearMission()
 end)
