@@ -145,6 +145,13 @@ RegisterNUICallback('storeCurrentVehicle', function(_, cb)
         return
     end
 
+    for i = -1, 5 do
+        local occupant = GetPedInVehicleSeat(veh, i)
+        if occupant ~= 0 then
+            TaskLeaveVehicle(occupant, veh, 0)
+        end
+    end
+
     local netId = NetworkGetNetworkIdFromEntity(veh)
     local fuel = Entity(veh).state.fuel or 100.0
     local engine = GetVehicleEngineHealth(veh)
@@ -184,7 +191,7 @@ RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
         finalPlate = plate or GetVehicleNumberPlateText(veh)
     end
     finalPlate = string.gsub(finalPlate or '', '^%s*(.-)%s*$', '%1')
-    TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
+    TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
     tryGiveKeys(veh, finalPlate)
 
     for i = 1, 5 do
@@ -280,7 +287,7 @@ end
 CreateThread(function()
     createMainBlips()
 
-    exports['qb-target']:AddBoxZone("TaxiGarage", Config.Blips.Garage.coords, 2.0, 2.0, {
+    exports['qb-target']:AddBoxZone("TaxiGarage", Config.Blips.Garage.coords, 10.0, 10.0, {
         name = "TaxiGarage",
         heading = 0,
         debugPoly = false,
@@ -306,7 +313,7 @@ CreateThread(function()
         distance = 2.5
     })
 
-    exports['qb-target']:AddBoxZone("TaxiMissions", Config.Blips.Mission.coords, 2.0, 2.0, {
+    exports['qb-target']:AddBoxZone("TaxiMissions", Config.Blips.Mission.coords, 10.0, 10.0, {
         name = "TaxiMissions",
         heading = 0,
         debugPoly = false,
@@ -344,6 +351,13 @@ RegisterNetEvent('bs_taxi:client:storeVehicle', function()
         return
     end
 
+    for i = -1, 5 do
+        local occupant = GetPedInVehicleSeat(veh, i)
+        if occupant ~= 0 then
+            TaskLeaveVehicle(occupant, veh, 0)
+        end
+    end
+
     local netId = NetworkGetNetworkIdFromEntity(veh)
     local fuel = Entity(veh).state.fuel or 100.0
     local engine = GetVehicleEngineHealth(veh)
@@ -375,7 +389,12 @@ CreateThread(function()
                         local vehicle = GetVehiclePedIsIn(PlayerPedId(), false)
                         if vehicle ~= 0 then
                             TaskEnterVehicle(missionPed, vehicle, -1, 2, 1.0, 1, 0)
-                            Wait(1500)
+
+                            local timeout = GetGameTimer() + 5000
+                            while not IsPedInVehicle(missionPed, vehicle, false) and GetGameTimer() < timeout do
+                                Wait(100)
+                            end
+
                             hasPassenger = true
 
                             if DoesBlipExist(missionBlip) then RemoveBlip(missionBlip) end

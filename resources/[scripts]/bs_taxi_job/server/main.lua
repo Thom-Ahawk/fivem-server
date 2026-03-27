@@ -157,16 +157,30 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     end
 
     local coords = Config.GarageSpawn.coords
-    local veh = CreateVehicleServerSetter(joaat(row.model), 'automobile', coords.x, coords.y, coords.z, coords.w)
-    if veh == 0 then
-        MySQL.update.await(('UPDATE %s SET stored = 1 WHERE id = ?'):format(FleetTable), { vehicleId })
-        TriggerClientEvent('QBCore:Notify', src, 'Impossible de sortir le véhicule.', 'error')
-        return
+    local veh = 0
+    local plateToMatch = string.gsub(row.plate or '', '^%s*(.-)%s*$', '%1'):upper()
+
+    local allVehs = GetAllVehicles()
+    for _, v in ipairs(allVehs) do
+        local p = string.gsub(GetVehicleNumberPlateText(v) or '', '^%s*(.-)%s*$', '%1'):upper()
+        if p == plateToMatch then
+            veh = v
+            SetEntityCoords(veh, coords.x, coords.y, coords.z)
+            SetEntityHeading(veh, coords.w)
+            break
+        end
     end
 
-    while not DoesEntityExist(veh) do Wait(10) end
-
-    SetVehicleNumberPlateText(veh, row.plate)
+    if veh == 0 then
+        veh = CreateVehicleServerSetter(joaat(row.model), 'automobile', coords.x, coords.y, coords.z, coords.w)
+        if veh == 0 then
+            MySQL.update.await(('UPDATE %s SET stored = 1 WHERE id = ?'):format(FleetTable), { vehicleId })
+            TriggerClientEvent('QBCore:Notify', src, 'Impossible de sortir le véhicule.', 'error')
+            return
+        end
+        while not DoesEntityExist(veh) do Wait(10) end
+        SetVehicleNumberPlateText(veh, row.plate)
+    end
     local spawnedPlate = string.gsub(GetVehicleNumberPlateText(veh) or row.plate or '', '^%s*(.-)%s*$', '%1')
     if spawnedPlate == '' then spawnedPlate = row.plate end
     SetVehicleEngineHealth(veh, row.engine_health)
@@ -176,7 +190,7 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     local netId = NetworkGetNetworkIdFromEntity(veh)
 
     MySQL.update.await(('UPDATE %s SET stored = 0, plate = ? WHERE id = ?'):format(FleetTable), { spawnedPlate, vehicleId })
-    TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 1)
+    TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
     TriggerClientEvent('bs_taxi:client:vehicleSpawned', src, netId, row.fuel, spawnedPlate)
     grantKeysToPlayer(src, spawnedPlate)
 end)
@@ -200,7 +214,7 @@ RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, bo
         return
     end
 
-    DeleteEntity(entity)
+    TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
 
     MySQL.update.await(
         ('UPDATE %s SET stored = 1, fuel = ?, engine_health = ?, body_health = ?, garage = ? WHERE id = ?'):format(FleetTable),
