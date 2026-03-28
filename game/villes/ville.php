@@ -117,6 +117,14 @@ header {
 .market:hover .hover-zone { box-shadow: 0 0 50px rgba(255,200,100,0.7); }
 .townhall:hover .hover-zone { box-shadow: 0 0 60px rgba(212,175,55,0.8); }
 .barracks:hover .hover-zone { box-shadow: 0 0 50px rgba(255,80,80,0.7); }
+.bank:hover .hover-zone { box-shadow: 0 0 50px rgba(100,200,255,0.7); }
+.map-point:hover .hover-zone { box-shadow: 0 0 50px rgba(100,255,150,0.7); }
+.port:hover .hover-zone { box-shadow: 0 0 50px rgba(0,191,255,0.7); }
+.forge:hover .hover-zone { box-shadow: 0 0 50px rgba(255,69,0,0.7); }
+.temple:hover .hover-zone { box-shadow: 0 0 50px rgba(255,255,255,0.7); }
+.academy:hover .hover-zone { box-shadow: 0 0 50px rgba(138,43,226,0.7); }
+.druid:hover .hover-zone { box-shadow: 0 0 50px rgba(50,205,50,0.7); }
+.mine:hover .hover-zone { box-shadow: 0 0 50px rgba(105,105,105,0.7); }
 
 </style>
 </head>
