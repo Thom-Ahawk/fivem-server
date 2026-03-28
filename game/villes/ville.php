@@ -2,6 +2,16 @@
 session_start();
 require '../../config.php';
 
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../../profil/login.php");
+    exit;
+}
+
+/* ===== RÉCUP JOUEUR ===== */
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$user = $stmt->fetch();
+
 /* ===== CHECK ID ===== */
 if (!isset($_GET['id'])) {
     die("Ville introuvable");
@@ -27,9 +37,8 @@ $points = $stmt->fetchAll();
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<head>
 <meta charset="UTF-8">
-<title><?= $ville['nom'] ?></title>
+<title><?= $ville['nom'] ?> - Les Terres de Couronne</title>
 
 <style>
 
@@ -74,6 +83,73 @@ header {
     font-size: 40px;
     color: #d4af37;
     margin-top: 30px;
+    text-shadow: 0 0 15px #000;
+}
+
+.logout {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 3;
+
+    padding: 8px 15px;
+    color: #d4af37;
+    border: 1px solid #d4af37;
+    background: rgba(0,0,0,0.6);
+    text-decoration: none;
+    transition: 0.3s;
+}
+
+.logout:hover {
+    background: #d4af37;
+    color: black;
+}
+
+/* profil */
+.profile-icon {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 3;
+
+    font-size: 24px;
+    cursor: pointer;
+
+    background: rgba(0,0,0,0.7);
+    padding: 8px 12px;
+    border: 1px solid #d4af37;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.profile-icon:hover {
+    background: rgba(0,0,0,0.9);
+    box-shadow: 0 0 10px #d4af37;
+}
+
+.profile-box {
+    position: absolute;
+    top: 80px;
+    left: 20px;
+    z-index: 3;
+
+    width: 250px;
+    padding: 20px;
+
+    background: #f4e4bc;
+    color: #3b2b1a;
+
+    border: 4px solid #8b5a2b;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+
+    display: none;
+}
+
+.profile-box h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #8b5a2b;
+    padding-bottom: 5px;
 }
 
 /* MAP POINTS */
@@ -92,42 +168,71 @@ header {
 .point {
     position: absolute;
     transform: translate(-50%, -100%);
+    text-align: center;
+    transition: transform 0.3s ease;
+}
+
+.point:hover {
+    transform: translate(-50%, -105%) scale(1.1);
 }
 
 .btn {
-    padding: 10px 18px;
-    font-size: 14px;
-    color: #d4af37;
-    border: 2px solid #d4af37;
-    background: rgba(0,0,0,0.7);
+    display: inline-block;
+    padding: 6px 14px;
+    font-size: 15px;
+    color: #fff;
+    text-shadow: 0 0 5px #000;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 4px;
     text-decoration: none;
+    transition: 0.3s;
+    white-space: nowrap;
+    backdrop-filter: blur(2px);
+}
+
+.point:hover .btn {
+    background: rgba(0,0,0,0.8);
+    border-color: #d4af37;
+    color: #d4af37;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
 }
 
 /* glow */
 .hover-zone {
     position: absolute;
-    width: 140px;
-    height: 140px;
-    transform: translate(-50%, -70%);
+    width: 160px;
+    height: 160px;
+    top: 50px; /* Aligné avec le bâtiment sous le label */
+    left: 50%;
+    transform: translateX(-50%);
     border-radius: 50%;
-    filter: blur(20px);
+    filter: blur(30px);
+    pointer-events: none;
+    transition: 0.4s ease;
+    opacity: 0;
+    z-index: -1;
 }
 
-.tavern:hover .hover-zone { box-shadow: 0 0 50px rgba(255,180,50,0.7); }
-.market:hover .hover-zone { box-shadow: 0 0 50px rgba(255,200,100,0.7); }
-.townhall:hover .hover-zone { box-shadow: 0 0 60px rgba(212,175,55,0.8); }
-.barracks:hover .hover-zone { box-shadow: 0 0 50px rgba(255,80,80,0.7); }
-.bank:hover .hover-zone { box-shadow: 0 0 50px rgba(100,200,255,0.7); }
-.map-point:hover .hover-zone { box-shadow: 0 0 50px rgba(100,255,150,0.7); }
-.port:hover .hover-zone { box-shadow: 0 0 50px rgba(0,191,255,0.7); }
-.forge:hover .hover-zone { box-shadow: 0 0 50px rgba(255,69,0,0.7); }
-.temple:hover .hover-zone { box-shadow: 0 0 50px rgba(255,255,255,0.7); }
-.academy:hover .hover-zone { box-shadow: 0 0 50px rgba(138,43,226,0.7); }
-.druid:hover .hover-zone { box-shadow: 0 0 50px rgba(50,205,50,0.7); }
-.mine:hover .hover-zone { box-shadow: 0 0 50px rgba(105,105,105,0.7); }
+.point:hover .hover-zone {
+    opacity: 1;
+}
+
+/* Couleurs de glow par bâtiment (glow externe plus naturel) */
+.tavern:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(255,180,50,0.5); }
+.market:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(255,200,100,0.5); }
+.townhall:hover .hover-zone { box-shadow: 0 0 70px 25px rgba(212,175,55,0.6); }
+.barracks:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(255,80,80,0.5); }
+.bank:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(100,200,255,0.5); }
+.map-point:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(100,255,150,0.5); }
+.port:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(0,191,255,0.5); }
+.forge:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(255,69,0,0.5); }
+.temple:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(255,255,255,0.5); }
+.academy:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(138,43,226,0.5); }
+.druid:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(50,205,50,0.5); }
+.mine:hover .hover-zone { box-shadow: 0 0 60px 20px rgba(105,105,105,0.5); }
 
 </style>
-</head>
 </head>
 
 <body>
@@ -138,7 +243,19 @@ header {
 
 <div class="overlay"></div>
 
+<!-- UI -->
+<a href="../../logout.php" class="logout">Déconnexion</a>
+
 <header><?= $ville['emoji'] ?> <?= $ville['nom'] ?></header>
+
+<div class="profile-icon" onclick="toggleProfile()">👤</div>
+
+<div class="profile-box" id="profileBox">
+    <h3><?= htmlspecialchars($user['username']) ?></h3>
+    <p>💰 Argent : <?= $user['argent'] ?></p>
+    <p>🍗 Faim : <?= $user['faim'] ?></p>
+    <p>⭐ Réputation : <?= $user['reputation'] ?></p>
+</div>
 
 <div class="map">
     <div class="map-points">
@@ -157,6 +274,13 @@ header {
 
     </div>
 </div>
+
+<script>
+function toggleProfile() {
+    let box = document.getElementById("profileBox");
+    box.style.display = (box.style.display === "block") ? "none" : "block";
+}
+</script>
 
 </body>
 </html>
