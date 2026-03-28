@@ -177,7 +177,6 @@ header {
 
 </style>
 </head>
-</head>
 
 <body>
   
