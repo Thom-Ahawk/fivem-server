@@ -47,6 +47,7 @@
     }
 
     .header h2 { margin: 0; font-size: 20px; }
+    .header .top-right { display: flex; gap: 8px; }
 
     .actions {
       padding: 12px 16px;
@@ -69,6 +70,36 @@
     button.secondary {
       background: #2f2f2f;
     }
+
+    button.danger {
+      background: #c62828;
+    }
+
+    /* Modal Profile */
+    #profileModal {
+      display: none;
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85);
+      z-index: 100;
+      color: #fff;
+      padding: 30px;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .profile-card {
+      background: var(--dark);
+      padding: 20px;
+      border-radius: 15px;
+      width: 80%;
+      border: 2px solid var(--primary);
+    }
+
+    .profile-card h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #444; padding-bottom: 10px; }
+    .profile-item { margin: 10px 0; display: flex; justify-content: space-between; font-size: 15px; }
+    .profile-item span:first-child { color: #aaa; }
 
     .list {
       padding: 12px 16px;
@@ -106,10 +137,14 @@
   <section id="tablet">
     <div class="header">
       <h2>📒 Tablette Garage Taxi</h2>
-      <button class="secondary" onclick="closeTablet()">Fermer</button>
+      <div class="top-right">
+        <button class="danger" onclick="logout()">Déconnexion</button>
+        <button class="secondary" onclick="closeTablet()">Fermer</button>
+      </div>
     </div>
 
     <div class="actions">
+      <button class="secondary" onclick="openProfile()">👤 Mon Profil</button>
       <button id="buyButton" onclick="buyVehicle()">Acheter véhicule unique</button>
       <button class="secondary" onclick="storeVehicle()">Ranger mon véhicule actuel</button>
       <button class="secondary" onclick="recoverFleet()">Récupérer bloqués</button>
@@ -117,6 +152,15 @@
 
     <div class="list" id="vehicles"></div>
     <div class="footer" id="footerTxt">—</div>
+
+    <div id="profileModal">
+        <div class="profile-card">
+            <h3>Fiche Employé</h3>
+            <div id="profileContent">Chargement...</div>
+            <br>
+            <button style="width:100%" onclick="closeProfile()">Retour</button>
+        </div>
+    </div>
   </section>
 
   <script>
@@ -131,7 +175,7 @@
     }
 
     function post(action, data = {}) {
-      fetch(`https://${resource}/${action}`, {
+      return fetch(`https://${resource}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=UTF-8' },
         body: JSON.stringify(data)
@@ -141,6 +185,35 @@
     function closeTablet() {
       document.body.style.display = 'none';
       post('close');
+    }
+
+    function logout() {
+        document.body.style.display = 'none';
+        post('logout');
+    }
+
+    function openProfile() {
+        document.getElementById('profileModal').style.display = 'flex';
+        post('getProfileData').then(res => res.json()).then(data => {
+            const root = document.getElementById('profileContent');
+            if (data && data.citizenid) {
+                root.innerHTML = `
+                    <div class="profile-item"><span>Nom Complet:</span> <span>${data.name}</span></div>
+                    <div class="profile-item"><span>ID Citoyen:</span> <span>${data.citizenid}</span></div>
+                    <div class="profile-item"><span>Grade:</span> <span>${data.jobGrade}</span></div>
+                    <div class="profile-item"><span>Salaire:</span> <span>${data.salary}$</span></div>
+                    <hr style="border:0; border-top:1px solid #333;">
+                    <div class="profile-item"><span>Cash:</span> <span style="color:#4caf50">${data.cash}$</span></div>
+                    <div class="profile-item"><span>Banque:</span> <span style="color:#2196f3">${data.bank}$</span></div>
+                `;
+            } else {
+                root.innerHTML = "Erreur lors de la récupération des données.";
+            }
+        });
+    }
+
+    function closeProfile() {
+        document.getElementById('profileModal').style.display = 'none';
     }
 
     function buyVehicle() {

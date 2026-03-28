@@ -118,10 +118,44 @@ local function refreshTablet()
     end)
 end
 
+local function storeVehicleLogic()
+    local ped = PlayerPedId()
+    local veh = GetVehiclePedIsIn(ped, false)
+
+    if veh == 0 then
+        local coords = GetEntityCoords(ped)
+        veh = QBCore.Functions.GetClosestVehicle(coords)
+        if veh == 0 or #(coords - GetEntityCoords(veh)) > 8.0 then
+            QBCore.Functions.Notify('Aucun véhicule taxi à proximité.', 'error')
+            return false
+        end
+    end
+
+    local netId = NetworkGetNetworkIdFromEntity(veh)
+    local fuel = Entity(veh).state.fuel or GetVehicleFuelLevel(veh) or 100.0
+    local engine = GetVehicleEngineHealth(veh)
+    local body = GetVehicleBodyHealth(veh)
+    TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
+    return true
+end
+
 RegisterNUICallback('close', function(_, cb)
     SetNuiFocus(false, false)
     garageOpen = false
     cb('ok')
+end)
+
+RegisterNUICallback('logout', function(_, cb)
+    SetNuiFocus(false, false)
+    garageOpen = false
+    QBCore.Functions.Notify('Déconnexion de la tablette...', 'primary')
+    cb('ok')
+end)
+
+RegisterNUICallback('getProfileData', function(_, cb)
+    QBCore.Functions.TriggerCallback('bs_taxi:server:getProfileData', function(data)
+        cb(data)
+    end)
 end)
 
 RegisterNUICallback('buyUniqueVehicle', function(_, cb)
@@ -137,25 +171,9 @@ RegisterNUICallback('spawnVehicle', function(data, cb)
 end)
 
 RegisterNUICallback('storeCurrentVehicle', function(_, cb)
-    local ped = PlayerPedId()
-    local veh = GetVehiclePedIsIn(ped, false)
-
-    if veh == 0 then
-        local coords = GetEntityCoords(ped)
-        veh = QBCore.Functions.GetClosestVehicle(coords)
-        if veh == 0 or #(coords - GetEntityCoords(veh)) > 8.0 then
-            QBCore.Functions.Notify('Aucun véhicule taxi à proximité.', 'error')
-            cb('ok')
-            return
-        end
+    if storeVehicleLogic() then
+        SetTimeout(250, refreshTablet)
     end
-
-    local netId = NetworkGetNetworkIdFromEntity(veh)
-    local fuel = Entity(veh).state.fuel or GetVehicleFuelLevel(veh) or 100.0
-    local engine = GetVehicleEngineHealth(veh)
-    local body = GetVehicleBodyHealth(veh)
-    TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
-    SetTimeout(250, refreshTablet)
     cb('ok')
 end)
 
@@ -185,9 +203,6 @@ RegisterNetEvent('bs_taxi:client:vehicleSpawned', function(netId, fuel, plate)
     TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
 
     local finalPlate = QBCore.Functions.GetPlate(veh)
-    if not finalPlate or finalPlate == '' then
-        finalPlate = plate or GetVehicleNumberPlateText(veh)
-    end
     finalPlate = string.gsub(finalPlate or '', '^%s*(.-)%s*$', '%1')
     TriggerServerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
     tryGiveKeys(veh, finalPlate)
@@ -352,23 +367,7 @@ RegisterNetEvent('bs_taxi:client:openGarage', function()
 end)
 
 RegisterNetEvent('bs_taxi:client:storeVehicle', function()
-    local ped = PlayerPedId()
-    local veh = GetVehiclePedIsIn(ped, false)
-
-    if veh == 0 then
-        local coords = GetEntityCoords(ped)
-        veh = QBCore.Functions.GetClosestVehicle(coords)
-        if veh == 0 or #(coords - GetEntityCoords(veh)) > 8.0 then
-            QBCore.Functions.Notify('Aucun véhicule taxi à proximité.', 'error')
-            return
-        end
-    end
-
-    local netId = NetworkGetNetworkIdFromEntity(veh)
-    local fuel = Entity(veh).state.fuel or GetVehicleFuelLevel(veh) or 100.0
-    local engine = GetVehicleEngineHealth(veh)
-    local body = GetVehicleBodyHealth(veh)
-    TriggerServerEvent('bs_taxi:server:storeVehicle', netId, fuel, engine, body)
+    storeVehicleLogic()
 end)
 
 RegisterNetEvent('bs_taxi:client:startMission', function()

@@ -93,6 +93,24 @@ QBCore.Functions.CreateCallback('bs_taxi:server:getFleet', function(source, cb)
     cb({ ok = true, vehicles = list, price = Config.VehiclePrice, uniqueModel = Config.UniqueGarageVehicle })
 end)
 
+QBCore.Functions.CreateCallback('bs_taxi:server:getProfileData', function(source, cb)
+    local player = QBCore.Functions.GetPlayer(source)
+    if not player then return cb({}) end
+
+    local charInfo = player.PlayerData.charinfo
+    local job = player.PlayerData.job
+    local money = player.PlayerData.money
+
+    cb({
+        citizenid = player.PlayerData.citizenid,
+        name = ('%s %s'):format(charInfo.firstname, charInfo.lastname),
+        jobGrade = job.grade.name or ('Grade %s'):format(job.grade.level),
+        salary = job.payment or 0,
+        cash = money.cash or 0,
+        bank = money.bank or 0
+    })
+end)
+
 RegisterNetEvent('bs_taxi:server:buyUniqueVehicle', function()
     local src = source
     local ok, player = isTaxi(src)
@@ -149,9 +167,9 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
 
     -- Vérifier si le véhicule existe déjà physiquement pour éviter les doublons
     local vehicles = GetAllVehicles()
-    local rowPlate = string.gsub(row.plate or '', '^%s*(.-)%s*$', '%1')
+    local rowPlate = QBCore.Functions.GetPlate(row.plate)
     for _, v in ipairs(vehicles) do
-        local plate = string.gsub(GetVehicleNumberPlateText(v) or '', '^%s*(.-)%s*$', '%1')
+        local plate = QBCore.Functions.GetPlate(v)
         if plate == rowPlate then
             TriggerClientEvent('QBCore:Notify', src, 'Ce véhicule est déjà présent dehors.', 'error')
             return
@@ -178,8 +196,7 @@ RegisterNetEvent('bs_taxi:server:spawnVehicle', function(vehicleId)
     while not DoesEntityExist(veh) do Wait(10) end
 
     SetVehicleNumberPlateText(veh, row.plate)
-    local spawnedPlate = string.gsub(GetVehicleNumberPlateText(veh) or row.plate or '', '^%s*(.-)%s*$', '%1')
-    if spawnedPlate == '' then spawnedPlate = row.plate end
+    local spawnedPlate = QBCore.Functions.GetPlate(veh)
     SetVehicleEngineHealth(veh, row.engine_health)
     SetVehicleBodyHealth(veh, row.body_health)
     Entity(veh).state.fuel = row.fuel
@@ -203,7 +220,7 @@ RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, bo
         return
     end
 
-    local plate = string.gsub(GetVehicleNumberPlateText(entity), '^%s*(.-)%s*$', '%1')
+    local plate = QBCore.Functions.GetPlate(entity)
 
     local row = MySQL.single.await(('SELECT id FROM %s WHERE plate = ? AND garage = ?'):format(FleetTable), { plate, TaxiGarageName })
     if not row then
@@ -211,13 +228,9 @@ RegisterNetEvent('bs_taxi:server:storeVehicle', function(netId, fuel, engine, bo
         return
     end
 
-    -- Au lieu de supprimer, on verrouille et on met à jour l'état
-    SetVehicleDoorsLocked(entity, 2)
-    -- On force les passagers à sortir si nécessaire
-    local driver = GetPedInVehicleSeat(entity, -1)
-    if driver > 0 then
-        TriggerClientEvent('bs_taxi:client:forceExitVehicle', -1, netId)
-    end
+    -- Au lieu de supprimer, on verrouille et on met à jour l'état via State Bags et Events
+    TriggerEvent('qb-vehiclekeys:server:setVehLockState', netId, 2)
+    TriggerClientEvent('bs_taxi:client:forceExitVehicle', -1, netId)
 
     MySQL.update.await(
         ('UPDATE %s SET stored = 1, fuel = ?, engine_health = ?, body_health = ?, garage = ? WHERE id = ?'):format(FleetTable),
