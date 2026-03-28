@@ -2,6 +2,16 @@
 session_start();
 require '../../config.php';
 
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../profil/login.php");
+    exit;
+}
+
+/* ===== USER ===== */
+$stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$user = $stmt->fetch();
+
 /* ===== CHECK ID ===== */
 if (!isset($_GET['id'])) {
     die("Ville introuvable");
@@ -27,9 +37,8 @@ $points = $stmt->fetchAll();
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<head>
 <meta charset="UTF-8">
-<title><?= $ville['nom'] ?></title>
+<title><?= htmlspecialchars($ville['nom']) ?> - Les Terres de Couronne</title>
 
 <style>
 
@@ -74,6 +83,46 @@ header {
     font-size: 40px;
     color: #d4af37;
     margin-top: 30px;
+}
+
+.logout {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 3;
+    padding: 8px 15px;
+    color: #d4af37;
+    border: 1px solid #d4af37;
+    background: rgba(0,0,0,0.6);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.profile-icon {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 3;
+    cursor: pointer;
+    font-size: 30px;
+    background: rgba(0,0,0,0.6);
+    padding: 5px 10px;
+    border: 1px solid #d4af37;
+    border-radius: 5px;
+}
+
+.profile-box {
+    position: absolute;
+    top: 80px;
+    left: 20px;
+    z-index: 4;
+    width: 250px;
+    padding: 20px;
+    background: #f4e4bc;
+    color: #3b2b1a;
+    border: 4px solid #8b5a2b;
+    display: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.8);
 }
 
 /* MAP POINTS */
@@ -138,6 +187,19 @@ header {
 
 <div class="overlay"></div>
 
+<!-- UI -->
+<a href="../../logout.php" class="logout">Déconnexion</a>
+
+<div class="profile-icon" onclick="toggleProfile()">👤</div>
+
+<div class="profile-box" id="profileBox">
+    <h3 style="margin-top:0"><?= htmlspecialchars($user['username']) ?></h3>
+    <hr>
+    <p>💰 Argent : <?= $user['argent'] ?></p>
+    <p>🍗 Faim : <?= $user['faim'] ?></p>
+    <p>⭐ Réputation : <?= $user['reputation'] ?></p>
+</div>
+
 <header><?= $ville['emoji'] ?> <?= $ville['nom'] ?></header>
 
 <div class="map">
@@ -157,6 +219,13 @@ header {
 
     </div>
 </div>
+
+<script>
+function toggleProfile() {
+    let box = document.getElementById("profileBox");
+    box.style.display = (box.style.display === "block") ? "none" : "block";
+}
+</script>
 
 </body>
 </html>
