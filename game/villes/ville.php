@@ -263,7 +263,7 @@ header {
         <?php
         $has_map = false;
         foreach ($points as $p):
-            if ($p['class'] === 'map-point') $has_map = true;
+            if ($p['class'] === 'map-point' || strpos(strtolower($p['nom']), 'carte') !== false) $has_map = true;
         ?>
             <div class="point <?= $p['class'] ?>" 
                  style="top: <?= $p['pos_y'] ?>; left: <?= $p['pos_x'] ?>;">

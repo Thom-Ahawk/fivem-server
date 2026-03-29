@@ -29,6 +29,7 @@ INSERT INTO batiments (ville_id, nom, icon, pos_x, pos_y, lien, class) VALUES
 (2, 'Mine Profonde', '⛏️', '70%', '65%', '#', 'mine'),
 (2, 'Caserne Nord', '⚔️', '25%', '35%', '#', 'barracks'),
 (2, 'Tour de Guet', '🏹', '80%', '20%', '#', 'barracks'),
+(2, 'Carte', '🗺️', '85%', '85%', '../map.php', 'map-point'),
 
 -- Greshorn (Forêt & Nature)
 (3, 'Bosquet Druidique', '🌳', '45%', '35%', '#', 'druid'),
@@ -36,6 +37,7 @@ INSERT INTO batiments (ville_id, nom, icon, pos_x, pos_y, lien, class) VALUES
 (3, 'Scierie', '🪓', '30%', '70%', '#', 'forge'),
 (3, 'Taverne de la Sève', '🍺', '55%', '65%', '#', 'tavern'),
 (3, 'Autel Ancien', '✨', '50%', '15%', '#', 'temple'),
+(3, 'Carte', '🗺️', '85%', '85%', '../map.php', 'map-point'),
 
 -- Aulelve (Cotière & Port)
 (4, 'Port Royal', '⚓', '50%', '75%', '#', 'port'),
@@ -43,10 +45,12 @@ INSERT INTO batiments (ville_id, nom, icon, pos_x, pos_y, lien, class) VALUES
 (4, 'Marché aux Poissons', '🐟', '70%', '60%', '#', 'market'),
 (4, 'Phare', '🕯️', '85%', '30%', '#', 'townhall'),
 (4, 'Le Vieux Marin', '🍺', '40%', '50%', '#', 'tavern'),
+(4, 'Carte', '🗺️', '85%', '85%', '../map.php', 'map-point'),
 
 -- Melrad (Savante & Magie)
 (5, 'Académie de Magie', '🔮', '50%', '30%', '#', 'academy'),
 (5, 'Grande Bibliothèque', '📜', '30%', '45%', '#', 'academy'),
 (5, 'Labo d''Alchimie', '⚗️', '70%', '45%', '#', 'academy'),
 (5, 'Observatoire', '🔭', '50%', '10%', '#', 'townhall'),
-(5, 'Temple Stellaire', '⛪', '50%', '60%', '#', 'temple');
+(5, 'Temple Stellaire', '⛪', '50%', '60%', '#', 'temple'),
+(5, 'Carte', '🗺️', '85%', '85%', '../map.php', 'map-point');
