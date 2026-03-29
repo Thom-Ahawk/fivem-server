@@ -264,11 +264,17 @@ header {
         $has_map = false;
         foreach ($points as $p):
             if ($p['class'] === 'map-point' || strpos(strtolower($p['nom']), 'carte') !== false) $has_map = true;
+
+            // Correction lien Mairie si non défini en BDD
+            $lien = $p['lien'];
+            if ($p['class'] === 'townhall' && ($lien === '#' || empty($lien))) {
+                $lien = 'mairie.php';
+            }
         ?>
             <div class="point <?= $p['class'] ?>" 
                  style="top: <?= $p['pos_y'] ?>; left: <?= $p['pos_x'] ?>;">
 
-                <a href="<?= $p['lien'] ?>" class="btn">
+                <a href="<?= $lien ?>" class="btn">
                     <?= $p['icon'] ?> <?= $p['nom'] ?>
                 </a>
 
