@@ -28,6 +28,12 @@ if (!$ville) {
     die("Ville inexistante");
 }
 
+/* ===== MISE À JOUR POSITION JOUEUR ===== */
+if ($user['ville'] !== $ville['nom']) {
+    $stmt = $pdo->prepare("UPDATE users SET ville = ? WHERE id = ?");
+    $stmt->execute([$ville['nom'], $user['id']]);
+}
+
 /* ===== RÉCUP BÂTIMENTS ===== */
 $stmt = $pdo->prepare("SELECT * FROM batiments WHERE ville_id = ?");
 $stmt->execute([$ville_id]);
