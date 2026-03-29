@@ -21,6 +21,14 @@ $ville = $stmt->fetch();
 $stmt = $pdo->prepare("SELECT COUNT(*) as pop FROM users WHERE ville = ?");
 $stmt->execute([$user['ville']]);
 $pop = $stmt->fetch();
+
+/* ===== RÉCUP MAIRE DE LA VILLE ===== */
+// On cherche l'utilisateur qui a le rôle 'maire' dans cette ville précise
+$stmt = $pdo->prepare("SELECT username FROM users WHERE ville = ? AND role = 'maire' LIMIT 1");
+$stmt->execute([$user['ville']]);
+$maire = $stmt->fetch();
+
+$is_maire = ($user['role'] === 'maire' && $user['ville'] === $ville['nom']);
 ?>
 
 <!DOCTYPE html>
@@ -191,7 +199,12 @@ h2 {
 <div class="profile-icon" onclick="toggleProfile()">👤</div>
 
 <div class="profile-box" id="profileBox">
-    <h3><?= htmlspecialchars($user['username']) ?></h3>
+    <h3>
+        <?= htmlspecialchars($user['username']) ?>
+        <?php if ($user['role'] === 'maire'): ?>
+            <span style="font-size: 14px; background: #8b5a2b; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 5px;">Maire</span>
+        <?php endif; ?>
+    </h3>
     <p>💰 Argent : <?= $user['argent'] ?></p>
     <p>🍗 Faim : <?= $user['faim'] ?></p>
     <p>⭐ Réputation : <?= $user['reputation'] ?></p>
@@ -213,18 +226,31 @@ h2 {
                 <div class="stat-val">👥 <?= $pop['pop'] ?> Âmes</div>
             </div>
             <div class="stat-card">
-                <div>Statut du Citoyen</div>
-                <div class="stat-val">📜 En règle</div>
+                <div>Maire de la Cité</div>
+                <div class="stat-val">👑 <?= $maire ? htmlspecialchars($maire['username']) : "Aucun" ?></div>
             </div>
             <div class="stat-card">
                 <div>Taxes Actuelles</div>
                 <div class="stat-val">💰 0%</div>
             </div>
             <div class="stat-card">
-                <div>Édits du Maire</div>
+                <div>Édits en vigueur</div>
                 <div class="stat-val">🛡️ Aucun</div>
             </div>
         </div>
+
+        <?php if ($is_maire): ?>
+            <div style="margin-top: 40px; border-top: 2px solid #8b5a2b; padding-top: 20px;">
+                <h2 style="color: #8b5a2b;">👑 Bureau du Maire</h2>
+                <p>En tant que maire de <strong><?= htmlspecialchars($user['ville']) ?></strong>, vous avez accès aux outils d'administration.</p>
+
+                <div class="actions">
+                    <a href="#" class="btn" style="background: #8b5a2b; color: #fff;">📢 Publier un Édit</a>
+                    <a href="#" class="btn" style="background: #8b5a2b; color: #fff;">💸 Modifier les Taxes</a>
+                    <a href="#" class="btn" style="background: #8b5a2b; color: #fff;">⚔️ Lever l'armée</a>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <div class="actions">
             <a href="#" class="btn">Changer de Nom (100💰)</a>

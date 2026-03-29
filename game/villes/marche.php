@@ -209,7 +209,12 @@ h1 {
 <div class="profile-icon" onclick="toggleProfile()">👤</div>
 
 <div class="profile-box" id="profileBox">
-    <h3><?= htmlspecialchars($user['username']) ?></h3>
+    <h3>
+        <?= htmlspecialchars($user['username']) ?>
+        <?php if ($user['role'] === 'maire'): ?>
+            <span style="font-size: 14px; background: #8b5a2b; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 5px;">Maire</span>
+        <?php endif; ?>
+    </h3>
     <p>💰 Argent : <?= $user['argent'] ?></p>
     <p>🍗 Faim : <?= $user['faim'] ?></p>
     <p>⭐ Réputation : <?= $user['reputation'] ?></p>
