@@ -278,8 +278,8 @@ header {
 
         <?php if (!$has_map): ?>
             <!-- Point Carte automatique s'il n'est pas déjà défini en BDD -->
-            <div class="point map-point" style="top: 82%; left: 88%;">
-                <a href="../map.php" class="btn">🗺️ Carte du Royaume</a>
+            <div class="point map-point" style="top: 85%; left: 85%;">
+                <a href="../map.php" class="btn">🗺️ Carte</a>
                 <div class="hover-zone"></div>
             </div>
         <?php endif; ?>
