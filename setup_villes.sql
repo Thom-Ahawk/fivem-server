@@ -19,7 +19,7 @@ INSERT INTO batiments (ville_id, nom, icon, pos_x, pos_y, lien, class) VALUES
 (1, 'Taverne', '🍺', '30%', '38%', '../taverne/', 'tavern'),
 (1, 'Banque', '🏦', '57%', '72%', '#', 'bank'),
 (1, 'Caserne', '⚔️', '70%', '48%', '#', 'barracks'),
-(1, 'Marché', '🛒', '34%', '62%', '#', 'market'),
+(1, 'Marché', '🛒', '34%', '62%', '../villes/marche.php', 'market'),
 (1, 'Mairie', '🏛️', '52%', '45%', '../villes/mairie.php', 'townhall'),
 (1, 'Carte', '🗺️', '75%', '79%', '../map.php', 'map-point'),
 
@@ -42,7 +42,7 @@ INSERT INTO batiments (ville_id, nom, icon, pos_x, pos_y, lien, class) VALUES
 -- Aulelve (Cotière & Port)
 (4, 'Port Royal', '⚓', '50%', '75%', '#', 'port'),
 (4, 'Chantier Naval', '🏗️', '25%', '65%', '#', 'port'),
-(4, 'Marché aux Poissons', '🐟', '70%', '60%', '#', 'market'),
+(4, 'Marché aux Poissons', '🐟', '70%', '60%', '../villes/marche.php', 'market'),
 (4, 'Phare', '🕯️', '85%', '30%', '../villes/mairie.php', 'townhall'),
 (4, 'Le Vieux Marin', '🍺', '40%', '50%', '#', 'tavern'),
 (4, 'Carte', '🗺️', '85%', '85%', '../map.php', 'map-point'),

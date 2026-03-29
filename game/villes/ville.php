@@ -270,6 +270,9 @@ header {
             if ($p['class'] === 'townhall' && ($lien === '#' || empty($lien))) {
                 $lien = 'mairie.php';
             }
+            if ($p['class'] === 'market' && ($lien === '#' || empty($lien))) {
+                $lien = 'marche.php';
+            }
         ?>
             <div class="point <?= $p['class'] ?>" 
                  style="top: <?= $p['pos_y'] ?>; left: <?= $p['pos_x'] ?>;">
