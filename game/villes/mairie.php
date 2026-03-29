@@ -24,11 +24,16 @@ $pop = $stmt->fetch();
 
 /* ===== RÉCUP MAIRE DE LA VILLE ===== */
 // On cherche l'utilisateur qui a le rôle 'maire' dans cette ville précise
-$stmt = $pdo->prepare("SELECT username FROM users WHERE ville = ? AND role = 'maire' LIMIT 1");
-$stmt->execute([$user['ville']]);
-$maire = $stmt->fetch();
+$maire = null;
+try {
+    $stmt = $pdo->prepare("SELECT username FROM users WHERE ville = ? AND role = 'maire' LIMIT 1");
+    $stmt->execute([$user['ville']]);
+    $maire = $stmt->fetch();
+} catch (Exception $e) {
+    // La colonne 'role' n'existe peut-être pas encore
+}
 
-$is_maire = ($user['role'] === 'maire' && $user['ville'] === $ville['nom']);
+$is_maire = (isset($user['role']) && $user['role'] === 'maire' && isset($ville['nom']) && $user['ville'] === $ville['nom']);
 ?>
 
 <!DOCTYPE html>
@@ -201,7 +206,7 @@ h2 {
 <div class="profile-box" id="profileBox">
     <h3>
         <?= htmlspecialchars($user['username']) ?>
-        <?php if ($user['role'] === 'maire'): ?>
+        <?php if (isset($user['role']) && $user['role'] === 'maire'): ?>
             <span style="font-size: 14px; background: #8b5a2b; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 5px;">Maire</span>
         <?php endif; ?>
     </h3>

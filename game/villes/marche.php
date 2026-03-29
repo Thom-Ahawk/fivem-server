@@ -211,7 +211,7 @@ h1 {
 <div class="profile-box" id="profileBox">
     <h3>
         <?= htmlspecialchars($user['username']) ?>
-        <?php if ($user['role'] === 'maire'): ?>
+        <?php if (isset($user['role']) && $user['role'] === 'maire'): ?>
             <span style="font-size: 14px; background: #8b5a2b; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 5px;">Maire</span>
         <?php endif; ?>
     </h3>
