@@ -260,7 +260,11 @@ header {
 <div class="map">
     <div class="map-points">
 
-        <?php foreach ($points as $p): ?>
+        <?php
+        $has_map = false;
+        foreach ($points as $p):
+            if ($p['class'] === 'map-point') $has_map = true;
+        ?>
             <div class="point <?= $p['class'] ?>" 
                  style="top: <?= $p['pos_y'] ?>; left: <?= $p['pos_x'] ?>;">
 
@@ -271,6 +275,14 @@ header {
                 <div class="hover-zone"></div>
             </div>
         <?php endforeach; ?>
+
+        <?php if (!$has_map): ?>
+            <!-- Point Carte automatique s'il n'est pas déjà défini en BDD -->
+            <div class="point map-point" style="top: 82%; left: 88%;">
+                <a href="../map.php" class="btn">🗺️ Carte du Royaume</a>
+                <div class="hover-zone"></div>
+            </div>
+        <?php endif; ?>
 
     </div>
 </div>
